@@ -1,0 +1,8 @@
+{
+    "user_xxx": {
+        "elo_realism": 1400,
+        "elo_realism_2v2": 900,
+        "elo_default_2v2": 1042,
+        "elo_default": 1100
+    }
+}
