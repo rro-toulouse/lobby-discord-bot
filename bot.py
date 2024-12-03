@@ -1,12 +1,14 @@
 import discord
-import json
+import sqlite3
+import os
 from enum import Enum
+from dotenv import load_dotenv
 from discord.ext import commands
 from discord.ui import Button, View
 
-TOKEN = 'YOUR_DISCORD_TOKEN_HERE'
-ALLOWED_CHANNEL_ID = YOUR_CHANNEL_ID_HERE  # Replace with your channel ID
-USER_DATA_FILE = "./user_data.json"
+load_dotenv()
+TOKEN = os.getenv("DISCORD_API_TOKEN")
+ALLOWED_CHANNEL_ID = os.getenv("WAR_CHANNEL_ID")
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -19,6 +21,51 @@ class Elo(Enum):
     DEFAULT_2V2 = 3
     DEFAULT = 4
     NONE = 5
+
+# Enum for match states
+class MatchState(Enum):
+    IN_CONSTRUCTION = "in_construction"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+
+# Enum for match states
+class MatchState:
+    IN_CONSTRUCTION = "in construction"
+    IN_PROGRESS = "in progress"
+    DONE = "done"
+
+# Database connection
+db_connection = sqlite3.connect(os.getenv("DATABASE_PATH"))
+db_cursor = db_connection.cursor()
+
+# Ensure the table exists
+db_cursor.execute("""
+CREATE TABLE IF NOT EXISTS matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    state TEXT NOT NULL,
+    team_a_players TEXT NOT NULL,
+    team_b_players TEXT NOT NULL,
+    creator_id INTEGER NOT NULL,
+    map_a TEXT,
+    map_b TEXT,
+    start_datetime TEXT,
+    game_type TEXT NOT NULL,
+    creation_datetime TEXT NOT NULL
+)
+""")
+db_connection.commit()
+db_cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    elo_realism INTEGER DEFAULT 1000,
+    elo_realism_2v2 INTEGER DEFAULT 1000,
+    elo_default INTEGER DEFAULT 1000,
+    elo_default_2v2 INTEGER DEFAULT 1000, 
+    created_at TEXT NOT NULL
+)
+""")
+db_connection.commit()
 
 # Define the view with buttons for the main menu
 class MainMenuView(View):
@@ -36,80 +83,64 @@ class CreateMatchView(View):
     def __init__(self):
         super().__init__(timeout=None)  # Keep buttons persistent
         # Buttons for selecting match type and size
-        self.add_item(Button(label="Objective Realism 2v2/3v3", style=discord.ButtonStyle.primary, custom_id="obj_realism_2v2"))
-        self.add_item(Button(label="Objective Realism", style=discord.ButtonStyle.primary, custom_id="obj_realism"))
-        self.add_item(Button(label="Objective Default 2v2/3v3", style=discord.ButtonStyle.primary, custom_id="obj_default_2v2"))
-        self.add_item(Button(label="Objective Default", style=discord.ButtonStyle.primary, custom_id="obj_default"))
+        self.add_item(Button(label="Rea 2v2/3v3", style=discord.ButtonStyle.primary, custom_id="obj_realism_2v2"))
+        self.add_item(Button(label="Realism", style=discord.ButtonStyle.primary, custom_id="obj_realism"))
+        self.add_item(Button(label="Def 2v2/3v3", style=discord.ButtonStyle.primary, custom_id="obj_default_2v2"))
+        self.add_item(Button(label="Default", style=discord.ButtonStyle.primary, custom_id="obj_default"))
 
-# Get Elo value for a specific user
-def get_elo(user_id, elo_type = Elo.NONE):
-    user_data = load_user_data()
-    elo_realism_2v2 = user_data.get(str(user_id), {}).get("elo_realism_2v2")
-    elo_realism = user_data.get(str(user_id), {}).get("elo_realism")
-    elo_default_2v2 = user_data.get(str(user_id), {}).get("elo_default_2v2")
-    elo_default = user_data.get(str(user_id), {}).get("elo_default")
 
-    # If ELO doesn't exist, create it
-    if elo_realism_2v2 == None:
-        elo_realism_2v2 = STARTING_ELO
-        update_elo(user_id, STARTING_ELO)
-    if elo_realism == None:
-        elo_realism = STARTING_ELO
-        update_elo(user_id, STARTING_ELO)
-    if elo_default_2v2 == None:
-        elo_default_2v2 = STARTING_ELO
-        update_elo(user_id, STARTING_ELO)
-    if elo_default == None:
-        elo_default = STARTING_ELO
-        update_elo(user_id, STARTING_ELO)
+# Function to add or update user in the database
+def ensure_user_in_db(user: discord.User):
+    db_cursor.execute("SELECT * FROM users WHERE id = ?", (user.id,))
+    user_record = db_cursor.fetchone()
+
+    if not user_record:
+        # If user doesn't exist, insert them
+        db_cursor.execute("""
+        INSERT INTO users (id, username, elo, created_at)
+        VALUES (?, ?, ?, ?)
+        """, (user.id, user.name, STARTING_ELO, STARTING_ELO, STARTING_ELO, STARTING_ELO, datetime.now().isoformat()))
+        db_connection.commit()
+    else:
+        # Update username in case it has changed
+        db_cursor.execute("""
+        UPDATE users SET username = ? WHERE id = ?
+        """, (user.name, user.id))
+        db_connection.commit()
+
+# Fetch user ELO
+def get_user_elo(user_id, elo_type):
+    result = db_cursor.fetchone()
 
     # Filtering
     if elo_type == Elo.REALISM_2V2:
-        return elo_realism_2v2
+        db_cursor.execute("SELECT elo_realism_2v2 FROM users WHERE id = ?", (user_id,))
     elif elo_type == Elo.REALISM:
-        return elo_realism
-    if elo_type == Elo.DEFAULT_2V2:
-        return elo_default_2v2
-    if elo_type == Elo.DEFAULT:
-        return elo_default
+        db_cursor.execute("SELECT elo_realism FROM users WHERE id = ?", (user_id,))
+    elif elo_type == Elo.DEFAULT_2V2:
+        db_cursor.execute("SELECT elo_defaut_2v2 FROM users WHERE id = ?", (user_id,))
+    elif elo_type == Elo.DEFAULT:
+        db_cursor.execute("SELECT elo_defaut FROM users WHERE id = ?", (user_id,))
     else:
-        return elo_realism_2v2, elo_realism, elo_default_2v2, elo_default 
+        return None
+    result = db_cursor.fetchone()
+    return result[0] if result else None
 
-# Update Elo value for a specific user
-def update_elo(user_id, new_elo, elo_type = Elo.NONE):
-    user_data = load_user_data()
-    if str(user_id) not in user_data:
-        user_data[str(user_id)] = {}
-    
+# Update user ELO
+def update_user_elo(user_id, new_elo, elo_type):
+
     # Filtering
     if elo_type == Elo.REALISM_2V2:
-        user_data[str(user_id)]["elo_realism_2v2"] = new_elo
+        db_cursor.execute("""UPDATE users SET elo_realism_2v2 = ? WHERE id = ?""", (new_elo, user_id))
     elif elo_type == Elo.REALISM:
-        user_data[str(user_id)]["elo_realism"] = new_elo
-    if elo_type == Elo.DEFAULT_2V2:
-        user_data[str(user_id)]["elo_default_2v2"] = new_elo
-    if elo_type == Elo.DEFAULT:
-        user_data[str(user_id)]["elo_default"] = new_elo
+        db_cursor.execute("""UPDATE users SET elo_realism = ? WHERE id = ?""", (new_elo, user_id))
+    elif elo_type == Elo.DEFAULT_2V2:
+        db_cursor.execute("""UPDATE users SET elo_defaut_2v2 = ? WHERE id = ?""", (new_elo, user_id))
+    elif elo_type == Elo.DEFAULT:
+        db_cursor.execute("""UPDATE users SET elo_defaut = ? WHERE id = ?""", (new_elo, user_id))
     else:
-        user_data[str(user_id)]["elo_realism_2v2"] = new_elo
-        user_data[str(user_id)]["elo_realism"] = new_elo
-        user_data[str(user_id)]["elo_default_2v2"] = new_elo
-        user_data[str(user_id)]["elo_default"] = new_elo
-    
-    save_user_data(user_data)
-
-# Load user data from the JSON file
-def load_user_data():
-    try:
-        with open(USER_DATA_FILE, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-# Save user data to the JSON file
-def save_user_data(data):
-    with open(USER_DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+        return
+    db_connection.commit()
 
 @bot.event
 async def on_ready():
@@ -138,15 +169,47 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("You selected 'Create Match'. Please select the match type and size.", ephemeral=True)
           
         elif custom_id == "view_profile":
-            user_elo_realism_2v2, user_elo_realism, user_elo_default, user_elo_default_2v2 = get_elo(interaction.user.id)
+            user_elo_realism_2v2 = get_user_elo(interaction.user.id, Elo.REALISM_2V2)
+            user_elo_realism = get_user_elo(interaction.user.id, Elo.REALISM)
+            user_elo_default_2v2 = get_user_elo(interaction.user.id, Elo.DEFAULT_2V2)
+            user_elo_default = get_user_elo(interaction.user.id, Elo.DEFAULT)
             await interaction.response.send_message("You selected 'View Profile'. Retrieving your profile...\nYour Realism 2v2/3v3 ELO is " + str(user_elo_realism_2v2) + "\nYour Realism ELO is " + str(user_elo_realism) + "\nYour Default 2v2/3v3 ELO is " + str(user_elo_default_2v2) + "\nYour Default ELO is " + str(user_elo_default), ephemeral=True)
            
         elif custom_id.startswith("obj_"):
             # Handle selection for match type
             match_type = custom_id.replace("_", " ").title()
-            await interaction.response.send_message(f"You selected {match_type}. The match creation process will now continue...", ephemeral=True)
-            # Add logic to handle match creation based on the selected match type here
+            # Insert match creation data into the database
+            creator_id = interaction.user.id
+            creation_datetime = datetime.now().isoformat()
+            match_data = {
+                "state": MatchState.IN_CONSTRUCTION,
+                "team_a_players": json.dumps([creator_id]),
+                "team_b_players": json.dumps([]),
+                "creator_id": creator_id,
+                "map_a": None,
+                "map_b": None,
+                "start_datetime": None,
+                "game_type": game_type,
+                "creation_datetime": creation_datetime
+            }
 
+            db_cursor.execute("""
+            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                match_data["state"],
+                match_data["team_a_players"],
+                match_data["team_b_players"],
+                match_data["creator_id"],
+                match_data["map_a"],
+                match_data["map_b"],
+                match_data["start_datetime"],
+                match_data["game_type"],
+                match_data["creation_datetime"]
+            ))
+            db_connection.commit()
+
+            await interaction.response.send_message(f"Match created successfully! Game type: {game_type}. You have been added to Team A.", ephemeral=True)
         # No interaction handling required for the "Help" button as it's a link button
 
 bot.run(TOKEN)
