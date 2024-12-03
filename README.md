@@ -19,11 +19,9 @@ pip install python-dotenv
 
 ## Run 
 
-### 1. Update Discord Tokens and IDs
+### 1. Update environment
 
-In *bot.py*, replace :
-- TOKEN with your discord server token.
-- ALLOWED_CHANNEL_ID with your channel ID.
+In *.env* file, replace values with yours.
 
 ### 2. Launch bot
 
