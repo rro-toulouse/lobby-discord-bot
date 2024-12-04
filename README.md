@@ -13,6 +13,11 @@ git clone https://github.com/rro-toulouse/lobby-discord-bot.git
 ```
 python -m venv env
 source env/bin/activate  # On Windows: env\Scripts\activate
+```
+
+### 3. Install required modules
+
+```
 python -m pip install -r requirements.txt
 ```
 
