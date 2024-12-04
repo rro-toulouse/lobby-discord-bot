@@ -153,7 +153,7 @@ async def on_interaction(interaction: discord.Interaction):
                 team_b = []
                 team_a.append(creator_id)
                 match_id = create_match(Match(match_id=-1, creator_id=creator_id, team_a=team_a, game_type=game_type.value, state=MatchState.IN_CONSTRUCTION))
-                lobby_channel = bot.get_channel(1313453546670260244)  # Fetch the channel by ID
+                lobby_channel = bot.get_channel(42)#1313453546670260244)  # Fetch the channel by ID
                 if lobby_channel:
                     # Fetch player names for Team A and Team B
                     #match = get_match_by_id(match_id)
