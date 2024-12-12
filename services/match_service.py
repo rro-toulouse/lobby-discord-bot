@@ -47,8 +47,8 @@ def create_match(match: Match):
 
     db_cursor.execute(
             """
-            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (match.state.value,
             '['+','.join(map(str, match.team_a))+']',
@@ -58,17 +58,26 @@ def create_match(match: Match):
             match.map_b,
             match.start_datetime,
             match.game_type,
-            match.creation_datetime)
+            match.creation_datetime,
+            match.result.value)
         )
     db_connection.commit()
     db_connection.close()
 
     return db_cursor.lastrowid  # Return the ID of the newly created match
 
+"""Delete a match from the database."""
+def delete_match(match_id):
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+    db_cursor.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+    db_connection.commit()
+    db_connection.close()
+
 """
 Updates the state of a match by match ID.
 """
-def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None): 
+def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None): 
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     
@@ -78,7 +87,7 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
 
     if state is not None:
         updates.append("state = ?")
-        params.append(state)
+        params.append(state.value)
     if team_a_players is not None:
         updates.append("team_a_players = ?")
         params.append(json.dumps(team_a_players))
@@ -94,6 +103,9 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
     if start_datetime is not None:
         updates.append("start_datetime = ?")
         params.append(start_datetime)
+    if creator_id is not None:
+        updates.append("creator_id = ?")
+        params.append(creator_id)
 
     params.append(match_id)
     query = f"UPDATE matches SET {', '.join(updates)} WHERE id = ?"

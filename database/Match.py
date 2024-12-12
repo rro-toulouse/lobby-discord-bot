@@ -1,11 +1,11 @@
 from typing import List, Optional
-from database.models import MatchState, Ladder
+from database.models import MatchState, Ladder, MatchResult
 from datetime import datetime
 
 class Match:
     def __init__(
         self,
-        match_id: int,
+        id: int,
         creator_id: int,
         team_a: Optional[List[int]] = None,
         team_b: Optional[List[int]] = None,
@@ -14,9 +14,10 @@ class Match:
         map_a: Optional[str] = None,
         map_b: Optional[str] = None,
         creation_datetime: Optional[datetime] = None,
-        start_datetime: Optional[datetime] = None
+        start_datetime: Optional[datetime] = None,
+        result: Optional[MatchState] = MatchResult.NONE
     ):
-        self.match_id = match_id
+        self.id = id
         self.creator_id = creator_id
         self.team_a = team_a if team_a is not None else []
         self.team_b = team_b if team_b is not None else []
@@ -26,6 +27,7 @@ class Match:
         self.map_b = map_b
         self.creation_datetime = datetime.now().isoformat()
         self.start_datetime = start_datetime 
+        self.result = result
 
     def add_player_to_team_a(self, player_id: int):
         """Add a player to Team A."""
@@ -49,7 +51,7 @@ class Match:
     def to_dict(self):
         """Convert the match object to a dictionary."""
         return {
-            "match_id": self.match_id,
+            "match_id": self.id,
             "creator_id": self.creator_id,
             "team_a": self.team_a,
             "team_b": self.team_b,
@@ -59,6 +61,7 @@ class Match:
             "map_b": self.map_b,
             "creation_datetime": self.start_datetime.isoformat(),
             "start_datetime": self.start_datetime.isoformat(),
+            "result": self.result
         }
 
     @classmethod
@@ -75,6 +78,7 @@ class Match:
             map_b=data.get("map_b"),
             creation_datetime=datetime.fromisoformat(data["creation_datetime"]),
             start_datetime=datetime.fromisoformat(data["start_datetime"]),
+            result=data.get("result")
         )
     
     def from_database(row: dict):
@@ -91,7 +95,7 @@ class Match:
             return None
         
         return Match(
-            match_id=row[0],
+            id=row[0],
             creator_id=row[4],
             team_a=[int(player_id) for player_id in row[2][1:-1].split(",")] if row[2][1:-1] else [],
             team_b=[int(player_id) for player_id in row[3][1:-1].split(",")] if row[3][1:-1] else [],
@@ -100,9 +104,10 @@ class Match:
             map_a=row[5],
             map_b=row[6],
             creation_datetime=datetime.fromisoformat(row[9]) if row[9] else None,
-            start_datetime=datetime.fromisoformat(row[7]) if row[7] else None
+            start_datetime=datetime.fromisoformat(row[7]) if row[7] else None,
+            result=MatchResult(row[10])
         )
 
     def __str__(self):
         """String representation of the match."""
-        return f"Match {self.match_id}: {self.game_type} - State: {self.state.name} - Team A: {len(self.team_a)} vs Team B: {len(self.team_b)}"
+        return f"Match {self.id}: {self.game_type} - State: {self.state.name} - Team A: {len(self.team_a)} vs Team B: {len(self.team_b)} - Result: {self.result}"
