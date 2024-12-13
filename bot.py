@@ -77,7 +77,7 @@ async def on_interaction(interaction: discord.Interaction):
             # Check if user is not in existing war in construction or in progress
             already_playing = is_user_already_in_war(interaction.user.id)
             if already_playing:
-                await interaction.response.send_message("You are already in a war, please leave it before joining another. TODO Add 'Leave War' button", ephemeral=True)
+                await interaction.response.send_message("❌ You are already in a war, please leave it before joining another. TODO Add 'Leave War' button", ephemeral=True)
             else:
                 await interaction.user.send("Select the match type:", view=CreateMatchView())
           
@@ -89,7 +89,7 @@ async def on_interaction(interaction: discord.Interaction):
         elif custom_id.startswith("obj_"):
             already_playing = is_user_already_in_war(interaction.user.id)
             if already_playing:
-                await interaction.response.send_message("You are already in a war, please leave it before joining another. TODO Add 'Leave War' button", ephemeral=True)
+                await interaction.response.send_message("❌ You are already in a war, please leave it before joining another. TODO Add 'Leave War' button", ephemeral=True)
             
             else:
                 game_type = Ladder.NONE
@@ -110,7 +110,7 @@ async def on_interaction(interaction: discord.Interaction):
                         channel=lobby_channel,
                         match_id=match_id,
                         game_type=game_type,
-                        creator_name=interaction.user.display_name,
+                        creator_id=creator_id,
                         team_a=team_a,
                         team_b=team_b
                     )

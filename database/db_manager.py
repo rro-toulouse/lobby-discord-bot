@@ -22,7 +22,8 @@ def create_tables(db_connection, db_cursor):
         start_datetime TEXT,
         game_type INTEGER NOT NULL,
         creation_datetime TEXT NOT NULL,
-        result TEXT NOT NULL
+        result TEXT NOT NULL,
+        ready_players TEXT NOT NULL
     )
     """)
     db_cursor.execute("""

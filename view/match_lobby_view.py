@@ -2,8 +2,8 @@ import discord
 from discord import Embed
 from discord.ui import Button, View
 from database.models import MatchState
-from services.match_service import get_match_by_id, update_match, delete_match
-from utils.team_utils import get_team_names
+from services.match_service import clear_players_ready, get_match_by_id, get_match_by_user_id, player_ready_toggle, update_match, delete_match
+from utils.team_utils import get_member_name_by_id
 from services.lobby_service import refresh_match_in_lobby
 
 # Lobby Functionality
@@ -36,10 +36,26 @@ class MatchLobbyView(View):
         else:
             team_b.append(user_id)
 
+        clear_players_ready(match.id) # Reset ready status
         update_match(self.match_id, team_a_players=team_a, team_b_players=team_b)
         await refresh_match_in_lobby(interaction.channel, match, team_a, team_b)
         await interaction.response.send_message(f"✅ {interaction.user.mention} joined the match!", ephemeral=True)
        
+    @discord.ui.button(label="✅ Ready", style=discord.ButtonStyle.gray)
+    async def ready_toggle(self, interaction: discord.Interaction, button: Button):
+        user_id = interaction.user.id
+        match = get_match_by_user_id(user_id)
+        if not match:
+            await interaction.response.send_message("❌ You are not part of any match.", ephemeral=True)
+            return
+ 
+        if player_ready_toggle(user_id, match.id):
+            await interaction.response.send_message("✅ You are now ready!", ephemeral=True)           
+        else:
+            await interaction.response.send_message("❌ You are no longer ready.", ephemeral=True)
+                 
+        await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b)
+    
     @discord.ui.button(label="Switch Team", style=discord.ButtonStyle.gray)
     async def switch_team(self, interaction: discord.Interaction, button: Button):
         """Switch the player's team."""
@@ -95,6 +111,7 @@ class MatchLobbyView(View):
             delete_match(self.match_id)
             await interaction.response.send_message("✅ You left the match. The match has been deleted as no players remain.", ephemeral=True)
         else:
+            clear_players_ready(match.id) # Reset ready status
             if user_id == self.creator_id:
                 new_creator = team_a[0] if len(team_a) else team_b[0]
                 update_match(self.match_id, team_a_players=team_a, team_b_players=team_b, creator_id=new_creator)
@@ -120,11 +137,15 @@ class MatchLobbyView(View):
         # Business rules
         team_a = match.team_a
         team_b = match.team_b
+        all_players = set(match.team_a + match.team_b)
         if (len(team_a) != len(team_b)):
             await interaction.response.send_message("❌ Not same number of players in both teams !", ephemeral=True)
             return
         elif (len(team_a) < 2):
             await interaction.response.send_message("❌ Need at least 2 players in both teams !", ephemeral=True)
+            return
+        elif (match.ready_players != all_players):
+            await interaction.response.send_message("❌ Not all players are ready. Please wait until everyone sets their status to ready.", ephemeral=True)
             return
         else:
             update_match(self.match_id, state=MatchState.IN_PROGRESS)
@@ -134,20 +155,23 @@ class MatchLobbyView(View):
 class MatchLobbyEmbed(Embed):
 
     description = ""
-    def __init__(self, game_type, creator_name):
+    def __init__(self, game_type):
         super().__init__()
 
+
         self.description = f"Game Type: **{game_type}**\n"
-        self.description  += f"Created by: **{creator_name}**\n"
-        embed = discord.Embed(
+        discord.Embed(
             title="New Match Created!",
             description=self.description ,
             color=discord.Color.blue()
         )
 
-    async def _init(self, team_a, team_b):
-        team_a_names = await get_team_names(team_a)
-        team_b_names = await get_team_names(team_b)
+    async def _init(self, channel: discord.TextChannel, creator_id: int):
+        creator_name = await get_member_name_by_id(channel, creator_id)
 
-        self.description  += f"**Team A:** 👑{', '.join(team_a_names)}\n"
-        self.description  += f"**Team B:** {', '.join(team_b_names)}"
+        self.description  += f"Created by: **{creator_name}**\n\n" 
+        self.description  += f"**Team A:**\n{creator_name} 👑 \n\n"
+        self.description  += f"**Team B:**"
+
+
+       

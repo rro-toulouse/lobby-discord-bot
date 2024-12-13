@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from typing import Optional
 from database.Match import Match
 from database.db_manager import get_connection
 from database.models import MatchState
@@ -8,7 +9,6 @@ from database.models import MatchState
 Checks if a user is already in any team across active matches.
 """
 def is_user_already_in_war(user_id):
-    return False
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
 
@@ -47,8 +47,8 @@ def create_match(match: Match):
 
     db_cursor.execute(
             """
-            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (match.state.value,
             '['+','.join(map(str, match.team_a))+']',
@@ -59,7 +59,8 @@ def create_match(match: Match):
             match.start_datetime,
             match.game_type,
             match.creation_datetime,
-            match.result.value)
+            match.result.value,
+            '['+','.join(map(str, match.ready_players))+']')
         )
     db_connection.commit()
     db_connection.close()
@@ -77,7 +78,7 @@ def delete_match(match_id):
 """
 Updates the state of a match by match ID.
 """
-def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None): 
+def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None): 
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     
@@ -106,6 +107,9 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
     if creator_id is not None:
         updates.append("creator_id = ?")
         params.append(creator_id)
+    if ready_players is not None:
+        updates.append("ready_players = ?")
+        params.append(json.dumps(ready_players))
 
     params.append(match_id)
     query = f"UPDATE matches SET {', '.join(updates)} WHERE id = ?"
@@ -190,7 +194,7 @@ def switch_team(match_id, user_id):
 
     return new_team
 
-def get_match_by_id(match_id: int):
+def get_match_by_id(match_id: int) -> Optional[Match]:
     # Connect to your SQLite database
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
@@ -209,4 +213,74 @@ def get_match_by_id(match_id: int):
         return match_data
     else:
         return None  # If no match found
+
+"""
+Retrieves the match where the user is a participant (in Team A or Team B).
+
+Args:
+    user_id (int): The ID of the user.
+    db_path (str): Path to the SQLite database.
     
+Returns:
+    Optional[Match]: The match object if found, else None.
+"""
+def get_match_by_user_id(user_id: int) -> Optional[Match]:
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+
+    # Query to find the match where the user is in team_a or team_b
+    query = """
+    SELECT * FROM matches
+    WHERE (? IN (SELECT value FROM json_each(team_a_players)) OR
+           ? IN (SELECT value FROM json_each(team_b_players)))
+      AND state IN ('in_construction')
+    """
+    
+    db_cursor.execute(query, (user_id, user_id))
+    row = db_cursor.fetchone()
+    db_connection.close()
+    if row:
+        return Match.from_database(row) 
+    return None
+
+"""
+Checks if a specific player has set their ready status for a match.
+
+Args:
+    user_id (int): The ID of the player to check.
+    match_id (int): The ID of the match.
+
+Returns:
+    bool: True if the player is ready, False otherwise.
+"""
+def check_ready_by_player_id(user_id: int, match_id: int) -> bool:
+
+    match = get_match_by_id(match_id)
+    if match != None:
+        return user_id in match.ready_players
+    return False
+
+def clear_players_ready(match_id: int):
+    match = get_match_by_id(match_id)
+    if match == None:
+        return
+    
+    match.ready_players.clear()
+    update_match(match.id, ready_players=match.ready_players)
+
+def player_ready_toggle(user_id: int, match_id: int) -> bool:
+    new_value = False
+    
+    match = get_match_by_user_id(user_id)
+    if match == None:
+        return False
+    
+    if user_id in match.ready_players:
+        match.ready_players.remove(user_id)
+        new_value = False
+    else:
+        match.ready_players.append(user_id)
+        new_value = True
+    update_match(match.id, ready_players=match.ready_players)
+
+    return new_value
