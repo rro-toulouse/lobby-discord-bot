@@ -1,5 +1,5 @@
 from typing import List, Optional
-from database.models import MatchState, Ladder, MatchResult
+from database.enums import MatchStep, Ladder, MatchResult
 from datetime import datetime
 
 class Match:
@@ -10,12 +10,12 @@ class Match:
         team_a: Optional[List[int]] = None,
         team_b: Optional[List[int]] = None,
         game_type: str = Ladder.NONE,
-        state: MatchState = MatchState.IN_CONSTRUCTION,
+        state: MatchStep = MatchStep.IN_CONSTRUCTION,
         map_a: Optional[str] = None,
         map_b: Optional[str] = None,
         creation_datetime: Optional[datetime] = None,
         start_datetime: Optional[datetime] = None,
-        result: Optional[MatchState] = MatchResult.NONE,
+        result: Optional[MatchStep] = MatchResult.NONE,
         ready_players: Optional[List[int]] = None
     ):
         self.id = id
@@ -76,7 +76,7 @@ class Match:
             team_a=data.get("team_a", []),
             team_b=data.get("team_b", []),
             game_type=data["game_type"],
-            state=MatchState(data["state"]),
+            state=MatchStep(data["state"]),
             map_a=data.get("map_a"),
             map_b=data.get("map_b"),
             creation_datetime=datetime.fromisoformat(data["creation_datetime"]),
@@ -104,7 +104,7 @@ class Match:
             team_a=[int(player_id) for player_id in row[2][1:-1].split(",")] if row[2][1:-1] else [],
             team_b=[int(player_id) for player_id in row[3][1:-1].split(",")] if row[3][1:-1] else [],
             game_type=row[8],
-            state=MatchState(row[1]),
+            state=MatchStep(row[1]),
             map_a=row[5],
             map_b=row[6],
             creation_datetime=datetime.fromisoformat(row[9]) if row[9] else None,

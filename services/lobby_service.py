@@ -1,18 +1,18 @@
 import discord
 from database.Match import Match
-from services.match_service import get_match_by_id
+from database.enums import MatchStep
 from utils.team_utils import set_teams_composition
 
 # Dictionary with key=match_id and value=message_data 
 posted_war_message_dict = {}
 
-async def add_match_to_lobby(channel: discord.TextChannel, match_id, game_type, creator_id, team_a, team_b):
+async def add_match_to_lobby(channel: discord.TextChannel, match_id, game_type, creator_id):
     """
     Posts / update match details in the lobby channel with a "Join Match" button.
     """
     from view.match_lobby_view import MatchLobbyView, MatchLobbyEmbed
 
-    view = MatchLobbyView(match_id, team_a[0])
+    view = MatchLobbyView(match_id=match_id, user_id=creator_id)
     embed = MatchLobbyEmbed(game_type)
     await embed._init(channel, creator_id)
 
@@ -22,16 +22,19 @@ async def add_match_to_lobby(channel: discord.TextChannel, match_id, game_type, 
         print("Warning: A match with this ID already exists.")
         return
 
-async def refresh_match_in_lobby(channel: discord.TextChannel, match: Match, team_a, team_b):
-    if not match.id in posted_war_message_dict: # Match does not exist
+async def refresh_match_in_lobby(channel: discord.TextChannel, match: Match, team_a, team_b, user_id):
+    if match is None or not match.id in posted_war_message_dict: # Match does not exist
         print("Warning: Match does not exist in local list")
         return
-    elif len(team_a) == 0 and len(team_b) == 0: # Match is now empty, delete it
+    elif (len(team_a) == 0 and len(team_b) == 0) or match.state == MatchStep.DONE: # Match is now empty or finished, delete it
         msg = await channel.fetch_message(posted_war_message_dict[match.id].id)
         await msg.delete()
         posted_war_message_dict.pop(match.id, None)
-    else: # Refresh view
-        embed = posted_war_message_dict[match.id].embeds[0] 
+    else: # Refresh view and embed
+        message = posted_war_message_dict[match.id]
+        embed = message.embeds[0] 
+
+        # Embed update
         description_array = embed.description.splitlines()
         description_str = description_array[0] + "\n" + description_array[1] + "\n\n"
              
@@ -42,4 +45,11 @@ async def refresh_match_in_lobby(channel: discord.TextChannel, match: Match, tea
         description_str += teams_composition_b
 
         embed.description = description_str
-        await posted_war_message_dict[match.id].edit(embed=embed)
+
+        await message.edit(embed=embed)
+        
+        # View update
+        from view.match_lobby_view import MatchLobbyView
+
+        view = MatchLobbyView(match.id, user_id)
+        await message.edit(view=view)

@@ -1,7 +1,7 @@
 import discord
 from datetime import datetime
 from database.db_manager import get_connection
-from database.models import Ladder
+from database.enums import Ladder
 
 STARTING_ELO = 1000
 

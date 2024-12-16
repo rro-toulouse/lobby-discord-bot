@@ -5,8 +5,7 @@ class Ladder(Enum):
     DEFAULT = 2
     NONE = 3
 
-# Enum for match states
-class MatchState(Enum):
+class MatchStep(Enum):
     IN_CONSTRUCTION = "in_construction"
     IN_PROGRESS = "in_progress"
     DONE = "done"
@@ -16,4 +15,10 @@ class MatchResult(Enum):
     TEAM_B_WON = "team_b_won"
     DRAW = "draw"
     CANCEL = "cancel"
+    NONE = "none"
+
+class MatchRole(Enum):
+    SPECTATOR = "spectator"
+    PLAYER = "player"
+    CREATOR = "creator"
     NONE = "none"

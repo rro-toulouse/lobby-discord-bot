@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 from database.Match import Match
 from database.db_manager import get_connection
-from database.models import MatchState
+from database.enums import MatchStep
 
 """
 Checks if a user is already in any team across active matches.
@@ -21,7 +21,7 @@ def is_user_already_in_war(user_id):
         team_b_players LIKE ?) AND
         (state LIKE ? OR
         state LIKE ?)
-    """, (f'%{user_id_str}%', f'%{user_id_str}%', f'%{MatchState.IN_CONSTRUCTION.value}%', f'%{MatchState.IN_PROGRESS.value}%'))
+    """, (f'%{user_id_str}%', f'%{user_id_str}%', f'%{MatchStep.IN_CONSTRUCTION.value}%', f'%{MatchStep.IN_PROGRESS.value}%'))
     result = db_cursor.fetchone() is not None  # Return the first match found, if any
     db_connection.close()
     return result 
@@ -33,7 +33,7 @@ def get_lobby_matches():
     db_cursor.execute("""
     SELECT * FROM matches
     WHERE state IN (?, ?)
-    """, (MatchState.IN_CONSTRUCTION.value, MatchState.IN_PROGRESS.value))
+    """, (MatchStep.IN_CONSTRUCTION.value, MatchStep.IN_PROGRESS.value))
     matches = db_cursor.fetchall()
     db_connection.close()
     return matches
@@ -284,3 +284,45 @@ def player_ready_toggle(user_id: int, match_id: int) -> bool:
     update_match(match.id, ready_players=match.ready_players)
 
     return new_value
+
+"""
+Check if a user is part of a match (in either team_a or team_b) by match_id.
+
+:param user_id: The ID of the user to check.
+:param match_id: The ID of the match.
+:return: True if user is in the match, False otherwise.
+"""
+def is_user_in_match_id(user_id: int, match_id: int) -> bool:
+    try:
+        # Connect to the database    
+        db_connection = get_connection()
+        db_cursor = db_connection.cursor()
+
+        # Fetch team_a and team_b for the given match_id
+        db_cursor.execute("SELECT team_a, team_b FROM matches WHERE id = ?", (match_id,))
+        result = db_cursor.fetchone()
+
+        if not result:
+            print(f"No match found with ID: {match_id}")
+            return False
+
+        team_a_data, team_b_data = result
+
+        # Convert team_a and team_b to lists of integers
+        team_a = [int(player_id) for player_id in team_a_data.split(",") if player_id.strip()]
+        team_b = [int(player_id) for player_id in team_b_data.split(",") if player_id.strip()]
+
+        # Check if the user_id exists in either team
+        if user_id in team_a or user_id in team_b:
+            return True
+
+        return False
+
+    except Exception as e:
+        print(f"Error while checking user in match: {e}")
+        return False
+
+    finally:
+        # Close the database connection
+        if db_connection:
+            db_connection.close()
