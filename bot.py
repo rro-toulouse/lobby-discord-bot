@@ -1,156 +1,54 @@
-import discord
-import sqlite3
-import os
-from enum import Enum
 from dotenv import load_dotenv
-from discord.ext import commands
-from discord.ui import Button, View
-
 load_dotenv()
+
+import discord
+import os
+from database.db_manager import *
+from discord.ext import commands
+from view.match_creation_view import CreateMatchView
+from view.main_menu_view import MainMenuView
+from database.enums import MatchStep
+from services.match_service import is_user_already_in_war, create_match, add_player_to_team
+from services.user_service import *
+from services.lobby_service import add_match_to_lobby
+from database.Match import Match
+from database.constants import DELETE_MESSAGE_AFTER_IN_SEC
+
 TOKEN = os.getenv("DISCORD_API_TOKEN")
-ALLOWED_CHANNEL_ID = os.getenv("WAR_CHANNEL_ID")
+WARS_LOBBY_CHANNEL = os.getenv("WAR_LOBBY_CHANNEL_ID")
+DISCORD_SERVER_ID = os.getenv("DISCORD_GUILD_ID")
+
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ELO 
-STARTING_ELO = 1000
-
-class Elo(Enum):
-    REALISM_2V2 = 1
-    REALISM = 2
-    DEFAULT_2V2 = 3
-    DEFAULT = 4
-    NONE = 5
-
-# Enum for match states
-class MatchState(Enum):
-    IN_CONSTRUCTION = "in_construction"
-    IN_PROGRESS = "in_progress"
-    DONE = "done"
-
-# Enum for match states
-class MatchState:
-    IN_CONSTRUCTION = "in construction"
-    IN_PROGRESS = "in progress"
-    DONE = "done"
-
-# Database connection
-db_connection = sqlite3.connect(os.getenv("DATABASE_PATH"))
+# Start Database
+db_connection = get_connection()
 db_cursor = db_connection.cursor()
+create_tables(db_connection, db_cursor)
 
-# Ensure the table exists
-db_cursor.execute("""
-CREATE TABLE IF NOT EXISTS matches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    state TEXT NOT NULL,
-    team_a_players TEXT NOT NULL,
-    team_b_players TEXT NOT NULL,
-    creator_id INTEGER NOT NULL,
-    map_a TEXT,
-    map_b TEXT,
-    start_datetime TEXT,
-    game_type TEXT NOT NULL,
-    creation_datetime TEXT NOT NULL
-)
-""")
-db_connection.commit()
-db_cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY,
-    username TEXT NOT NULL,
-    elo_realism INTEGER DEFAULT 1000,
-    elo_realism_2v2 INTEGER DEFAULT 1000,
-    elo_default INTEGER DEFAULT 1000,
-    elo_default_2v2 INTEGER DEFAULT 1000, 
-    created_at TEXT NOT NULL
-)
-""")
-db_connection.commit()
+# Register the /start command
+@bot.tree.command(name="start", description="Start the bot and display the main menu in DM")
+async def start(interaction: discord.Interaction):
+    ensure_user_in_db(interaction.user)
+    
+    try:
+        await interaction.user.send("Welcome to the Main Menu! Choose an option below:", view=MainMenuView())
+        await interaction.response.send_message("Check your private messages for the Main Menu!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+    except discord.Forbidden:
+        await interaction.response.send_message("I couldn't send you a private message. Please enable direct messages from server members.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
 
-# Define the view with buttons for the main menu
-class MainMenuView(View):
-    def __init__(self):
-        super().__init__(timeout=None)  # Buttons persist until explicitly removed
-
-        # Add buttons to the view
-        self.add_item(Button(label="Create Match", style=discord.ButtonStyle.primary, custom_id="create_match"))
-        self.add_item(Button(label="Join Match", style=discord.ButtonStyle.success, custom_id="join_match"))
-        self.add_item(Button(label="View Profile", style=discord.ButtonStyle.secondary, custom_id="view_profile"))
-        self.add_item(Button(label="Help", style=discord.ButtonStyle.link, url="https://your-help-url.com"))  # Link button
-
-# Define the match creation menu after clicking the "Create Match" button
-class CreateMatchView(View):
-    def __init__(self):
-        super().__init__(timeout=None)  # Keep buttons persistent
-        # Buttons for selecting match type and size
-        self.add_item(Button(label="Rea 2v2/3v3", style=discord.ButtonStyle.primary, custom_id="obj_realism_2v2"))
-        self.add_item(Button(label="Realism", style=discord.ButtonStyle.primary, custom_id="obj_realism"))
-        self.add_item(Button(label="Def 2v2/3v3", style=discord.ButtonStyle.primary, custom_id="obj_default_2v2"))
-        self.add_item(Button(label="Default", style=discord.ButtonStyle.primary, custom_id="obj_default"))
-
-
-# Function to add or update user in the database
-def ensure_user_in_db(user: discord.User):
-    db_cursor.execute("SELECT * FROM users WHERE id = ?", (user.id,))
-    user_record = db_cursor.fetchone()
-
-    if not user_record:
-        # If user doesn't exist, insert them
-        db_cursor.execute("""
-        INSERT INTO users (id, username, elo, created_at)
-        VALUES (?, ?, ?, ?)
-        """, (user.id, user.name, STARTING_ELO, STARTING_ELO, STARTING_ELO, STARTING_ELO, datetime.now().isoformat()))
-        db_connection.commit()
-    else:
-        # Update username in case it has changed
-        db_cursor.execute("""
-        UPDATE users SET username = ? WHERE id = ?
-        """, (user.name, user.id))
-        db_connection.commit()
-
-# Fetch user ELO
-def get_user_elo(user_id, elo_type):
-    result = db_cursor.fetchone()
-
-    # Filtering
-    if elo_type == Elo.REALISM_2V2:
-        db_cursor.execute("SELECT elo_realism_2v2 FROM users WHERE id = ?", (user_id,))
-    elif elo_type == Elo.REALISM:
-        db_cursor.execute("SELECT elo_realism FROM users WHERE id = ?", (user_id,))
-    elif elo_type == Elo.DEFAULT_2V2:
-        db_cursor.execute("SELECT elo_defaut_2v2 FROM users WHERE id = ?", (user_id,))
-    elif elo_type == Elo.DEFAULT:
-        db_cursor.execute("SELECT elo_defaut FROM users WHERE id = ?", (user_id,))
-    else:
-        return None
-    result = db_cursor.fetchone()
-    return result[0] if result else None
-
-# Update user ELO
-def update_user_elo(user_id, new_elo, elo_type):
-
-    # Filtering
-    if elo_type == Elo.REALISM_2V2:
-        db_cursor.execute("""UPDATE users SET elo_realism_2v2 = ? WHERE id = ?""", (new_elo, user_id))
-    elif elo_type == Elo.REALISM:
-        db_cursor.execute("""UPDATE users SET elo_realism = ? WHERE id = ?""", (new_elo, user_id))
-    elif elo_type == Elo.DEFAULT_2V2:
-        db_cursor.execute("""UPDATE users SET elo_defaut_2v2 = ? WHERE id = ?""", (new_elo, user_id))
-    elif elo_type == Elo.DEFAULT:
-        db_cursor.execute("""UPDATE users SET elo_defaut = ? WHERE id = ?""", (new_elo, user_id))
-    else:
-        return
-    db_connection.commit()
-
+# Sync the command tree
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
 
-    # Send the button to the specific channel
-    channel = bot.get_channel(ALLOWED_CHANNEL_ID)
-    if channel:
-        await channel.send("Welcome to the Main Menu! Choose an option below:", view=MainMenuView())
+    try:
+        await bot.tree.sync()
+        print(f"Bot is ready and commands are synced as {bot.user}")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
 
+# Handle button interactions
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     # Check if this interaction comes from a button and get its custom_id
@@ -158,58 +56,57 @@ async def on_interaction(interaction: discord.Interaction):
         custom_id = interaction.data.get("custom_id")
         
         if custom_id == "synchronize_account":
-            await interaction.response.send_message("You selected 'Create Match'. Starting the workflow...", ephemeral=True)
+            await interaction.response.send_message("You selected 'Create Match'. Starting the workflow...", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
             # Add logic to handle the 'Create Match' workflow here
 
         elif custom_id == "create_match":
-            await interaction.response.send_message("You selected 'Create Match'. Starting the workflow...", ephemeral=True)
-            await interaction.followup.send("Select the match type:", view=CreateMatchView())
-
-        elif custom_id == "join_match":
-            await interaction.response.send_message("You selected 'Create Match'. Please select the match type and size.", ephemeral=True)
+            # Check if user is not in existing war in construction or in progress
+            already_playing = is_user_already_in_war(interaction.user.id)
+            if already_playing:
+                await interaction.response.send_message("❌ You are already in a war, please leave it before joining another.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            else:
+                await interaction.response.send_message("You selected 'Create Match'. Starting the workflow...", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+                await interaction.user.send("Select the match type:", view=CreateMatchView())
           
         elif custom_id == "view_profile":
-            user_elo_realism_2v2 = get_user_elo(interaction.user.id, Elo.REALISM_2V2)
-            user_elo_realism = get_user_elo(interaction.user.id, Elo.REALISM)
-            user_elo_default_2v2 = get_user_elo(interaction.user.id, Elo.DEFAULT_2V2)
-            user_elo_default = get_user_elo(interaction.user.id, Elo.DEFAULT)
-            await interaction.response.send_message("You selected 'View Profile'. Retrieving your profile...\nYour Realism 2v2/3v3 ELO is " + str(user_elo_realism_2v2) + "\nYour Realism ELO is " + str(user_elo_realism) + "\nYour Default 2v2/3v3 ELO is " + str(user_elo_default_2v2) + "\nYour Default ELO is " + str(user_elo_default), ephemeral=True)
+            user_elo_realism = get_user_elo(interaction.user.id, Ladder.REALISM)
+            user_elo_default = get_user_elo(interaction.user.id, Ladder.DEFAULT)
+            await interaction.response.send_message("Your Realism ELO is " + str(user_elo_realism) + "\nYour Default ELO is " + str(user_elo_default), ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
            
+        elif custom_id == "help":
+            await interaction.response.send_message("Open MOHAA Discord '❓ | how-to-play' channel to get help", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            
+
         elif custom_id.startswith("obj_"):
-            # Handle selection for match type
-            match_type = custom_id.replace("_", " ").title()
-            # Insert match creation data into the database
-            creator_id = interaction.user.id
-            creation_datetime = datetime.now().isoformat()
-            match_data = {
-                "state": MatchState.IN_CONSTRUCTION,
-                "team_a_players": json.dumps([creator_id]),
-                "team_b_players": json.dumps([]),
-                "creator_id": creator_id,
-                "map_a": None,
-                "map_b": None,
-                "start_datetime": None,
-                "game_type": game_type,
-                "creation_datetime": creation_datetime
-            }
-
-            db_cursor.execute("""
-            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                match_data["state"],
-                match_data["team_a_players"],
-                match_data["team_b_players"],
-                match_data["creator_id"],
-                match_data["map_a"],
-                match_data["map_b"],
-                match_data["start_datetime"],
-                match_data["game_type"],
-                match_data["creation_datetime"]
-            ))
-            db_connection.commit()
-
-            await interaction.response.send_message(f"Match created successfully! Game type: {game_type}. You have been added to Team A.", ephemeral=True)
-        # No interaction handling required for the "Help" button as it's a link button
-
+            already_playing = is_user_already_in_war(interaction.user.id)
+            if already_playing:
+                await interaction.response.send_message("❌ You are already in a war, please leave it before joining another.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            
+            else:
+                game_type = Ladder.NONE
+                if (custom_id == "obj_realism"):
+                   game_type = Ladder.REALISM
+                elif (custom_id == "obj_default"):
+                    game_type = Ladder.DEFAULT
+                    
+                # Insert match creation data into the database
+                creator_id = interaction.user.id
+                team_a = []
+                team_b = []
+                team_a.append(creator_id)
+                match_id = create_match(Match(id=-1, creator_id=creator_id, team_a=team_a, game_type=game_type.value, state=MatchStep.IN_CONSTRUCTION))
+                lobby_channel = bot.get_channel(int(WARS_LOBBY_CHANNEL)) # Fetch the channel by ID
+                if lobby_channel:
+                    await add_match_to_lobby(
+                        channel=lobby_channel,
+                        match_id=match_id,
+                        game_type=game_type,
+                        creator_id=creator_id
+                    )
+                    await interaction.response.send_message(f"✅ Match created and posted in #{lobby_channel.name}!")
+                else:
+                    print(f"Channel with ID {WARS_LOBBY_CHANNEL} not found or bot cannot access it.")
+                    await interaction.response.send_message("❌ Could not find the #wars-lobby channel.")
+                    
+# Run the bot
 bot.run(TOKEN)
