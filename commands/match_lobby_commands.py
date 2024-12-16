@@ -134,11 +134,9 @@ async def start_match_command(interaction: discord.Interaction, match_id: int, c
     if (len(team_a) != len(team_b)):
         await interaction.response.send_message("❌ Not same number of players in both teams !", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
-    elif (len(team_a) < 1):
-    #elif (len(team_a) < 2):
+    elif (len(team_a) < 2):
         await interaction.response.send_message("❌ Need at least 2 players in both teams !", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
-    # TODO Display Close Match button only when match is started
     elif (sorted(match.ready_players) != sorted(all_players)):
         await interaction.response.send_message("❌ Not all players are ready. Please wait until everyone sets their status to ready.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
