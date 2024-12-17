@@ -11,7 +11,7 @@ from database.enums import MatchStep
 from services.match_service import is_user_already_in_war, create_match, add_player_to_team
 from services.user_service import *
 from services.lobby_service import add_match_to_lobby
-from database.Match import Match
+from models.Match import Match
 from database.constants import DELETE_MESSAGE_AFTER_IN_SEC
 
 TOKEN = os.getenv("DISCORD_API_TOKEN")

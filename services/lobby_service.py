@@ -1,5 +1,5 @@
 import discord
-from database.Match import Match
+from models.Match import Match
 from database.enums import MatchStep
 from utils.team_utils import set_teams_composition
 

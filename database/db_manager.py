@@ -35,5 +35,13 @@ def create_tables(db_connection, db_cursor):
         created_at TEXT NOT NULL
     )
     """)
+    db_cursor.execute("""
+    CREATE TABLE IF NOT EXISTS match_results (
+        id INTEGER PRIMARY KEY,
+        match_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        result TEXT NOT NULL
+    )
+    """)
     db_connection.commit()
     db_connection.close()

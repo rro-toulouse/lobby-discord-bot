@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Optional
-from database.Match import Match
+from models.Match import Match
 from database.db_manager import get_connection
 from database.enums import MatchStep
 
@@ -286,7 +286,7 @@ def player_ready_toggle(user_id: int, match_id: int) -> bool:
     return new_value
 
 """
-Check if a user is part of a match (in either team_a or team_b) by match_id.
+Check if a user is part of a match (in either team_a_players or team_b_players) by match_id.
 
 :param user_id: The ID of the user to check.
 :param match_id: The ID of the match.
@@ -299,7 +299,7 @@ def is_user_in_match_id(user_id: int, match_id: int) -> bool:
         db_cursor = db_connection.cursor()
 
         # Fetch team_a and team_b for the given match_id
-        db_cursor.execute("SELECT team_a, team_b FROM matches WHERE id = ?", (match_id,))
+        db_cursor.execute("SELECT team_a_players, team_b_players FROM matches WHERE id = ?", (match_id,))
         result = db_cursor.fetchone()
 
         if not result:
@@ -309,8 +309,8 @@ def is_user_in_match_id(user_id: int, match_id: int) -> bool:
         team_a_data, team_b_data = result
 
         # Convert team_a and team_b to lists of integers
-        team_a = [int(player_id) for player_id in team_a_data.split(",") if player_id.strip()]
-        team_b = [int(player_id) for player_id in team_b_data.split(",") if player_id.strip()]
+        team_a = [int(player_id) for player_id in team_a_data[1:-1].split(",") if player_id.strip()]
+        team_b = [int(player_id) for player_id in team_b_data[1:-1].split(",") if player_id.strip()]
 
         # Check if the user_id exists in either team
         if user_id in team_a or user_id in team_b:
@@ -326,3 +326,30 @@ def is_user_in_match_id(user_id: int, match_id: int) -> bool:
         # Close the database connection
         if db_connection:
             db_connection.close()
+
+"""
+Return the number of votes for this match
+"""
+def add_match_result(user_id: int, match_id: int, result: str) -> int:
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+
+    db_cursor.execute("INSERT INTO match_results (match_id, user_id, result) VALUES (?, ?, ?)",
+                       (match_id, user_id, result))
+    db_connection.commit()
+
+    db_connection.execute("SELECT result, COUNT(*) as votes FROM match_results WHERE match_id = ? GROUP BY result",
+                    (match_id,))
+    votes = db_cursor.fetchall()
+    db_connection.close()
+
+    return votes
+
+"""Finalize a match in the database."""
+def finalize_match(match_id, final_result):
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+    db_cursor.execute("UPDATE matches SET state = ?, result = ? WHERE match_id = ?",
+                   (MatchStep.DONE, final_result, match_id))
+    db_connection.commit()
+    db_connection.close()
