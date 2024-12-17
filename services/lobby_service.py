@@ -1,5 +1,6 @@
 import discord
 from database.Match import Match
+from database.constants import WAR_CHANNEL_NAME_END,  WAR_CHANNEL_NAME_START
 from database.enums import MatchStep
 from utils.team_utils import set_teams_composition
 
@@ -53,3 +54,7 @@ async def refresh_match_in_lobby(channel: discord.TextChannel, match: Match, tea
 
         view = MatchLobbyView(match.id, user_id)
         await message.edit(view=view)
+    
+    # Refresh channel name
+    await channel.edit(name=WAR_CHANNEL_NAME_START + str(len(posted_war_message_dict)) + WAR_CHANNEL_NAME_END)
+   
