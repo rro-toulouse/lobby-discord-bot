@@ -1,5 +1,5 @@
 from typing import List, Optional
-from database.enums import MatchStep, Ladder, MatchResult
+from database.enums import MatchStep, Ladder, MatchIssue
 from datetime import datetime
 
 class Match:
@@ -15,7 +15,7 @@ class Match:
         map_b: Optional[str] = None,
         creation_datetime: Optional[datetime] = None,
         start_datetime: Optional[datetime] = None,
-        result: Optional[MatchStep] = MatchResult.NONE,
+        result: Optional[MatchIssue] = MatchIssue.NONE,
         ready_players: Optional[List[int]] = None
     ):
         self.id = id
@@ -63,7 +63,7 @@ class Match:
             "map_b": self.map_b,
             "creation_datetime": self.start_datetime.isoformat(),
             "start_datetime": self.start_datetime.isoformat(),
-            "result": self.result,
+            "result": self.result.value,
             "ready_players": self.ready_players
         }
 
@@ -81,7 +81,7 @@ class Match:
             map_b=data.get("map_b"),
             creation_datetime=datetime.fromisoformat(data["creation_datetime"]),
             start_datetime=datetime.fromisoformat(data["start_datetime"]),
-            result=data.get("result"),
+            result=MatchIssue(data["result"]),
             ready_players=data.get("ready_players", [])
         )
     
@@ -109,10 +109,10 @@ class Match:
             map_b=row[6],
             creation_datetime=datetime.fromisoformat(row[9]) if row[9] else None,
             start_datetime=datetime.fromisoformat(row[7]) if row[7] else None,
-            result=MatchResult(row[10]),
+            result=MatchIssue(row[10]),
             ready_players = [int(player_id) for player_id in row[11][1:-1].split(",")] if row[11][1:-1] else [],
         )
 
     def __str__(self):
         """String representation of the match."""
-        return f"Match {self.id}: {self.game_type} - State: {self.state.name} - Team A: {len(self.team_a)} vs Team B: {len(self.team_b)} - Result: {self.result}"
+        return f"Match {self.id}: {self.game_type} - State: {self.state.name} - Team A: {len(self.team_a)} vs Team B: {len(self.team_b)} - Result: {self.result.name}"

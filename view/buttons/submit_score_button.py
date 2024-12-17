@@ -1,6 +1,7 @@
 import discord
 from discord.ui import Button
 from commands.match_lobby_commands import submit_score_command
+from view.dropdown.result_dropdown import ResultDropdown
 
 class SubmitScoreButton(Button):
     """
@@ -15,4 +16,5 @@ class SubmitScoreButton(Button):
         #self.disabled = True
 
     async def callback(self, interaction: discord.Interaction):
-        await submit_score_command(interaction, self.match_id)
+        dropdown = ResultDropdown(self.match_id)
+        await interaction.response.send_message("Select the match result:", view=dropdown, ephemeral=True)

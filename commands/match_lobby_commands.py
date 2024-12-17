@@ -2,7 +2,7 @@ import discord
 import pytz
 from datetime import datetime, timedelta
 from database.enums import MatchStep
-from services.match_service import clear_players_ready, get_match_by_id, get_match_by_user_id, player_ready_toggle, update_match, delete_match
+from services.match_service import add_match_result, clear_players_ready, finalize_match, get_match_by_id, get_match_by_user_id, is_user_in_match_id, player_ready_toggle, update_match, delete_match
 from services.lobby_service import refresh_match_in_lobby
 from database.constants import DELETE_MESSAGE_AFTER_IN_SEC, FINISH_MATCH_AFTER_IN_SEC
 
@@ -40,7 +40,7 @@ async def ready_toggle_command(interaction: discord.Interaction):
     if not match:
         await interaction.response.send_message("❌ You are not part of any match.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
-    
+
     if player_ready_toggle(user_id, match.id):
         await interaction.response.send_message("✅ You are now ready!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)           
     else:
@@ -134,7 +134,8 @@ async def start_match_command(interaction: discord.Interaction, match_id: int, c
     if (len(team_a) != len(team_b)):
         await interaction.response.send_message("❌ Not same number of players in both teams !", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
-    elif (len(team_a) < 2):
+    elif (len(team_a) < 1):
+    #elif (len(team_a) < 2):
         await interaction.response.send_message("❌ Need at least 2 players in both teams !", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
     elif (sorted(match.ready_players) != sorted(all_players)):
@@ -144,11 +145,11 @@ async def start_match_command(interaction: discord.Interaction, match_id: int, c
         update_match(match_id, state=MatchStep.IN_PROGRESS)
         await interaction.response.send_message("✅ Match started! No more players can join.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         finish_match_time = datetime.now(pytz.timezone('CET')) + timedelta(seconds=FINISH_MATCH_AFTER_IN_SEC)
-        #await interaction.message.edit(content=f"--\n⏳ Match in progress!\nCan be finished at CET {finish_match_time.strftime('%H:%M:%S')}", view=None)
-        await interaction.message.edit(content=f"--\n⏳ Match in progress!", view=None)
+        #await interaction.message.edit(content=f"⏳ Match in progress!\nCan be finished at CET {finish_match_time.strftime('%H:%M:%S')}", view=None)
+        await interaction.message.edit(content=f"⏳ Match in progress!", view=None)
         await refresh_match_in_lobby(interaction.channel, match, team_a, team_b, user_id)
 
-async def submit_score_command(interaction: discord.Interaction, match_id: int):
+async def submit_score_command(interaction: discord.Interaction, result:str, match_id: int):
     user_id = interaction.user.id
     match = get_match_by_id(match_id)
     
@@ -156,14 +157,26 @@ async def submit_score_command(interaction: discord.Interaction, match_id: int):
         await interaction.response.send_message("❌ Match does not exist!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
 
-    # TODO Add score input interface
-
+    if not is_user_in_match_id(user_id, match.id):
+        await interaction.response.send_message("❌ You are not part of this match.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+        return
+    
     if match.state != MatchStep.IN_PROGRESS:  
         await interaction.response.send_message("❌ Match has to be started first!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
+
+    result = interaction.data["values"][0]
+    votes = add_match_result(user_id, match.id, result)
+
+    total_votes = sum(row["votes"] for row in votes)
+    if total_votes >= len(votes) // 2 + 1:  # Half + 1 for consensus
+        finalize_match(match.id, result)
+        await interaction.response.send_message("✅ Match finalized!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
     else:
-        update_match(match_id, state=MatchStep.DONE)
-        match = get_match_by_id(match_id)
-        await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, user_id)
+        await interaction.response.send_message(f"✅ Vote registered for {result}. Waiting for more votes...", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+
+    update_match(match_id, state=MatchStep.DONE)
+    match = get_match_by_id(match_id)
+    await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, user_id)
 
     # TODO Add match to history channel

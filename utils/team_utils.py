@@ -1,6 +1,6 @@
 import discord
 
-from database.Match import Match
+from models.Match import Match
 from services.match_service import check_ready_by_player_id
 
 async def set_teams_composition(channel: discord.TextChannel, team_name: str, team_list, match: Match):

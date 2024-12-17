@@ -1,6 +1,6 @@
 import discord
-from database.Match import Match
 from database.constants import WAR_CHANNEL_NAME_END,  WAR_CHANNEL_NAME_START
+from models.Match import Match
 from database.enums import MatchStep
 from utils.team_utils import set_teams_composition
 
