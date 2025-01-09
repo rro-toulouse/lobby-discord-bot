@@ -16,7 +16,8 @@ class Match:
         creation_datetime: Optional[datetime] = None,
         start_datetime: Optional[datetime] = None,
         result: Optional[MatchIssue] = MatchIssue.NONE,
-        ready_players: Optional[List[int]] = None
+        ready_players: Optional[List[int]] = None,
+        ban_list: Optional[List[int]] = None,
     ):
         self.id = id
         self.creator_id = creator_id
@@ -30,25 +31,7 @@ class Match:
         self.start_datetime = start_datetime 
         self.result = result
         self.ready_players = ready_players if ready_players is not None else set()
-
-    def add_player_to_team_a(self, player_id: int):
-        """Add a player to Team A."""
-        if player_id not in self.team_a:
-            self.team_a.append(player_id)
-
-    def add_player_to_team_b(self, player_id: int):
-        """Add a player to Team B."""
-        if player_id not in self.team_b:
-            self.team_b.append(player_id)
-
-    def switch_team(self, player_id: int):
-        """Switch a player between teams."""
-        if player_id in self.team_a:
-            self.team_a.remove(player_id)
-            self.team_b.append(player_id)
-        elif player_id in self.team_b:
-            self.team_b.remove(player_id)
-            self.team_a.append(player_id)
+        self.ban_list = ban_list if ban_list is not None else []
 
     def to_dict(self):
         """Convert the match object to a dictionary."""
@@ -64,7 +47,8 @@ class Match:
             "creation_datetime": self.start_datetime.isoformat(),
             "start_datetime": self.start_datetime.isoformat(),
             "result": self.result.value,
-            "ready_players": self.ready_players
+            "ready_players": self.ready_players,
+            "ban_list": self.ban_list,
         }
 
     @classmethod
@@ -82,7 +66,8 @@ class Match:
             creation_datetime=datetime.fromisoformat(data["creation_datetime"]),
             start_datetime=datetime.fromisoformat(data["start_datetime"]),
             result=MatchIssue(data["result"]),
-            ready_players=data.get("ready_players", [])
+            ready_players=data.get("ready_players", []),
+            ban_list=data.get("ban_list", []),
         )
     
     def from_database(row: dict):
@@ -111,6 +96,7 @@ class Match:
             start_datetime=datetime.fromisoformat(row[7]) if row[7] else None,
             result=MatchIssue(row[10]),
             ready_players = [int(player_id) for player_id in row[11][1:-1].split(",")] if row[11][1:-1] else [],
+            ban_list = [int(player_id) for player_id in row[12][1:-1].split(",")] if row[12][1:-1] else []
         )
 
     def __str__(self):

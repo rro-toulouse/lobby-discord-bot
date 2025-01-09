@@ -47,8 +47,8 @@ def create_match(match: Match):
 
     db_cursor.execute(
             """
-            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players, ban_list)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (match.state.value,
             '['+','.join(map(str, match.team_a))+']',
@@ -60,7 +60,8 @@ def create_match(match: Match):
             match.game_type,
             match.creation_datetime,
             match.result.value,
-            '['+','.join(map(str, match.ready_players))+']')
+            '['+','.join(map(str, match.ready_players))+']',
+            '['+','.join(map(str, match.ban_list))+']')
         )
     db_connection.commit()
     db_connection.close()
@@ -78,7 +79,7 @@ def delete_match(match_id):
 """
 Updates the state of a match by match ID.
 """
-def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None): 
+def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None, ban_list=None): 
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     
@@ -110,6 +111,9 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
     if ready_players is not None:
         updates.append("ready_players = ?")
         params.append(json.dumps(ready_players))
+    if ban_list is not None:
+        updates.append("ban_list = ?")
+        params.append(json.dumps(ban_list))
 
     params.append(match_id)
     query = f"UPDATE matches SET {', '.join(updates)} WHERE id = ?"
@@ -328,6 +332,36 @@ def is_user_in_match_id(user_id: int, match_id: int) -> bool:
             db_connection.close()
 
 """
+    Checks if a user is in the ban list for a specific match.
+    
+    Args:
+        match_id (int): The ID of the match.
+        user_id (int): The user ID to check.
+    
+    Returns:
+        bool: True if the user is banned, False otherwise.
+"""
+def is_user_banned(match_id: int, user_id: int) -> bool:
+    
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+
+    # Fetch the ban_list for the given match_id
+    db_cursor.execute("SELECT ban_list FROM matches WHERE id = ?", (match_id,))
+    result = db_cursor.fetchone()
+    
+    db_connection.close()
+
+    if result:
+        ban_list = result[0]
+        if ban_list:
+            # Convert the ban_list (comma-separated string) into a list of integers
+            banned_users = [int(player_id) for player_id in ban_list[1:-1].split(",") if player_id.strip()]
+            return user_id in banned_users
+
+    return False
+
+"""
 Return the number of votes for this match
 """
 def add_match_result(user_id: int, match_id: int, result: str) -> int:
@@ -338,7 +372,7 @@ def add_match_result(user_id: int, match_id: int, result: str) -> int:
                        (match_id, user_id, result))
     db_connection.commit()
 
-    db_connection.execute("SELECT result, COUNT(*) as votes FROM match_results WHERE match_id = ? GROUP BY result",
+    db_connection.execute("SELECT result, COUNT(*) as votes FROM match_results WHERE id = ? GROUP BY result",
                     (match_id,))
     votes = db_cursor.fetchall()
     db_connection.close()
@@ -349,7 +383,34 @@ def add_match_result(user_id: int, match_id: int, result: str) -> int:
 def finalize_match(match_id, final_result):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
-    db_cursor.execute("UPDATE matches SET state = ?, result = ? WHERE match_id = ?",
+    db_cursor.execute("UPDATE matches SET state = ?, result = ? WHERE id = ?",
                    (MatchStep.DONE, final_result, match_id))
     db_connection.commit()
     db_connection.close()
+
+def ban_player_from_match(player_id: int, match_id: int):
+    match = get_match_by_id(match_id)
+    match.ban_list.append(player_id)
+    update_match(match.id, ban_list=match.ban_list)
+
+"""Retrieve players list in a match."""
+def get_players(match_id: int) -> list[int]:
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+
+    # Fetch match data and players
+    db_cursor.execute("SELECT team_a_players, team_b_players FROM matches WHERE id = ?", (match_id,))
+    match = db_cursor.fetchone()
+    db_connection.close()
+
+    team_a = match[0][1:-1].split(",") if match[0] else []
+    team_b = match[1][1:-1].split(",") if match[1] else []
+
+    if team_a[0] == '' and team_b[0] == '':
+        return []
+    elif team_a[0] == '':
+        return list(team_b)
+    elif team_b[0] == '':
+        return list(team_a)
+    else:
+        return list(set(team_a + team_b))
