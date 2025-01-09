@@ -18,6 +18,7 @@ class Match:
         result: Optional[MatchIssue] = MatchIssue.NONE,
         ready_players: Optional[List[int]] = None,
         ban_list: Optional[List[int]] = None,
+        last_action: Optional[datetime] = None,
     ):
         self.id = id
         self.creator_id = creator_id
@@ -32,6 +33,7 @@ class Match:
         self.result = result
         self.ready_players = ready_players if ready_players is not None else set()
         self.ban_list = ban_list if ban_list is not None else []
+        self.last_action = last_action
 
     def to_dict(self):
         """Convert the match object to a dictionary."""
@@ -44,11 +46,12 @@ class Match:
             "state": self.state.value,
             "map_a": self.map_a,
             "map_b": self.map_b,
-            "creation_datetime": self.start_datetime.isoformat(),
+            "creation_datetime": self.creation_datetime.isoformat(),
             "start_datetime": self.start_datetime.isoformat(),
             "result": self.result.value,
             "ready_players": self.ready_players,
             "ban_list": self.ban_list,
+            "last_action": self.last_action.isoformat(),
         }
 
     @classmethod
@@ -68,6 +71,7 @@ class Match:
             result=MatchIssue(data["result"]),
             ready_players=data.get("ready_players", []),
             ban_list=data.get("ban_list", []),
+            last_action=datetime.fromisoformat(data["last_action"]),
         )
     
     def from_database(row: dict):
@@ -96,7 +100,8 @@ class Match:
             start_datetime=datetime.fromisoformat(row[7]) if row[7] else None,
             result=MatchIssue(row[10]),
             ready_players = [int(player_id) for player_id in row[11][1:-1].split(",")] if row[11][1:-1] else [],
-            ban_list = [int(player_id) for player_id in row[12][1:-1].split(",")] if row[12][1:-1] else []
+            ban_list = [int(player_id) for player_id in row[12][1:-1].split(",")] if row[12][1:-1] else [],
+            last_action=datetime.fromisoformat(row[13]) if row[13] else None,
         )
 
     def __str__(self):

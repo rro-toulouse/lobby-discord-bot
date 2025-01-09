@@ -1,6 +1,9 @@
+from datetime import datetime, timedelta
 import discord
 from discord import Embed
 from discord.ui import View
+import pytz
+from database.constants import FINISH_MATCH_AFTER_IN_SEC
 from database.enums import MatchStep
 from services.match_service import get_match_by_id
 from utils.user_utils import get_member_name_by_id
@@ -27,7 +30,9 @@ class MatchLobbyView(View):
             self.add_item(PlayerActionDropdown(label="Select a player to manage...", match_id=match_id, player_list=player_list, creator_id=match.creator_id))
          
         elif (match.state == MatchStep.IN_PROGRESS):
-            self.add_item(ResultDropdown(label="Select Match Result", style=discord.ButtonStyle.green, match_id=match_id))
+            # Business rule : Can enter score after a delay
+            if (match.start_datetime + timedelta(seconds=FINISH_MATCH_AFTER_IN_SEC) <= datetime.now(pytz.timezone('CET'))): 
+                self.add_item(ResultDropdown(label="Select Match Result", style=discord.ButtonStyle.green, match_id=match_id))
 
 class MatchLobbyEmbed(Embed):
     description = ""

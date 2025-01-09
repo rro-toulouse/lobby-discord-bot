@@ -47,8 +47,8 @@ def create_match(match: Match):
 
     db_cursor.execute(
             """
-            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players, ban_list)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players, ban_list, last_action)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (match.state.value,
             '['+','.join(map(str, match.team_a))+']',
@@ -61,14 +61,18 @@ def create_match(match: Match):
             match.creation_datetime,
             match.result.value,
             '['+','.join(map(str, match.ready_players))+']',
-            '['+','.join(map(str, match.ban_list))+']')
+            '['+','.join(map(str, match.ban_list))+']',
+            match.last_action
+            )
         )
     db_connection.commit()
     db_connection.close()
 
     return db_cursor.lastrowid  # Return the ID of the newly created match
 
-"""Delete a match from the database."""
+"""
+Delete a match from the database.
+"""
 def delete_match(match_id):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
@@ -79,7 +83,7 @@ def delete_match(match_id):
 """
 Updates the state of a match by match ID.
 """
-def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None, ban_list=None): 
+def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None, ban_list=None, last_action=None):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     
@@ -114,6 +118,9 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
     if ban_list is not None:
         updates.append("ban_list = ?")
         params.append(json.dumps(ban_list))
+    if last_action is not None:
+        updates.append("last_action = ?")
+        params.append(last_action)
 
     params.append(match_id)
     query = f"UPDATE matches SET {', '.join(updates)} WHERE id = ?"
@@ -121,10 +128,29 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
     db_connection.commit()
     db_connection.close()
 
+
+"""
+Updates the last action timestamp for a match.
+
+Args:
+    match_id (int): The ID of the match.
+"""
+def update_last_action(match_id: int):    
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+
+    # Update the last_action column with the current timestamp
+    db_cursor.execute(
+        "UPDATE matches SET last_action = ? WHERE id = ?",
+        (datetime.now().isoformat(), match_id)
+    )
+    db_connection.commit()
+    db_connection.close()
+
+"""
+Adds a player to a specified team in a match.
+"""
 def add_player_to_team(match_id, team, user_id):
-    """
-    Adds a player to a specified team in a match.
-    """
     if team not in ['team_a', 'team_b']:
         raise ValueError("Team must be 'team_a' or 'team_b'.")
 
@@ -156,10 +182,10 @@ def add_player_to_team(match_id, team, user_id):
     db_connection.commit()
     db_connection.close()
 
+"""
+Switches the user between Team A and Team B in a match.
+"""
 def switch_team(match_id, user_id):
-    """
-    Switches the user between Team A and Team B in a match.
-    """
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
 

@@ -24,7 +24,8 @@ class PlayerActionDropdown(Select):
     async def callback(self, interaction: discord.Interaction):
         player_id = int(self.values[0]) if self.values[0] != "cancel" else None
 
-        if not player_id:
+        if self.values[0] == "cancel" or player_id == None or not player_id:
+            await interaction.response.send_message("❌ Action canceled.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
             return
         
         user_id = interaction.user.id
