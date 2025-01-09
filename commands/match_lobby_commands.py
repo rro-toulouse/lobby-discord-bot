@@ -2,9 +2,10 @@ import discord
 import pytz
 from datetime import datetime, timedelta
 from database.enums import MatchStep
-from services.match_service import clear_players_ready, get_match_by_id, get_match_by_user_id, player_ready_toggle, update_match, delete_match
+from services.match_service import add_match_result, ban_player_from_match, clear_players_ready, finalize_match, get_match_by_id, get_match_by_user_id, is_user_banned, is_user_in_match_id, player_ready_toggle, update_match, delete_match
 from services.lobby_service import refresh_match_in_lobby
 from database.constants import DELETE_MESSAGE_AFTER_IN_SEC, FINISH_MATCH_AFTER_IN_SEC
+from utils.user_utils import get_member_name_by_id
 
 """Handle joining a match."""
 async def join_match_command(interaction: discord.Interaction, match_id: int):
@@ -20,6 +21,10 @@ async def join_match_command(interaction: discord.Interaction, match_id: int):
 
         if user_id in team_a or user_id in team_b:
             await interaction.response.send_message("❌ You are already in this match!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            return
+
+        if is_user_banned(match_id, user_id):
+            await interaction.response.send_message("❌ You are banned from this match!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
             return
 
         # Add to Team A if it's smaller; else add to Team B
@@ -40,7 +45,7 @@ async def ready_toggle_command(interaction: discord.Interaction):
     if not match:
         await interaction.response.send_message("❌ You are not part of any match.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
-    
+
     if player_ready_toggle(user_id, match.id):
         await interaction.response.send_message("✅ You are now ready!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)           
     else:
@@ -79,8 +84,11 @@ async def switch_team_command(interaction: discord.Interaction, match_id: int):
     await interaction.response.send_message(message, ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
 
 """Allow a user to leave the match."""
-async def leave_match_command(interaction: discord.Interaction, match_id: int):
-    user_id = interaction.user.id
+async def leave_match_command(interaction: discord.Interaction, match_id: int, player_id: int = -1):
+    if (player_id == -1):
+        user_id = interaction.user.id
+    else:
+        user_id = player_id
     match = get_match_by_id(match_id)
 
     if not match:
@@ -89,6 +97,7 @@ async def leave_match_command(interaction: discord.Interaction, match_id: int):
 
     team_a = match.team_a
     team_b = match.team_b
+    player_name = await get_member_name_by_id(interaction.channel, user_id)
 
     if user_id in team_a:
         team_a.remove(user_id)
@@ -100,7 +109,7 @@ async def leave_match_command(interaction: discord.Interaction, match_id: int):
 
     if len(team_a) == 0 and len(team_b) == 0:
         delete_match(match_id)
-        await interaction.response.send_message("✅ You left the match. The match has been deleted as no players remain.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+        await interaction.response.send_message(f"✅ **{player_name}** has left the match. The match has been deleted as no players remain.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         await refresh_match_in_lobby(interaction.channel, match, team_a, team_b, user_id)
         return
     else:
@@ -108,10 +117,10 @@ async def leave_match_command(interaction: discord.Interaction, match_id: int):
         if user_id == match.creator_id:
             new_creator = team_a[0] if len(team_a) else team_b[0]
             update_match(match_id, team_a_players=team_a, team_b_players=team_b, creator_id=new_creator)
-            await interaction.response.send_message(f"✅ You left the match. Leadership has been transferred to <@{new_creator}>.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            await interaction.response.send_message(f"✅ **{player_name}** has left the match. Leadership has been transferred to <@{new_creator}>.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         else:
             update_match(match_id, team_a_players=team_a, team_b_players=team_b)
-            await interaction.response.send_message("✅ You left the match.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            await interaction.response.send_message(f"✅ **{player_name}** has left the match.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         match = get_match_by_id(match_id)
         await refresh_match_in_lobby(interaction.channel, match, team_a, team_b, user_id)
 
@@ -134,7 +143,8 @@ async def start_match_command(interaction: discord.Interaction, match_id: int, c
     if (len(team_a) != len(team_b)):
         await interaction.response.send_message("❌ Not same number of players in both teams !", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
-    elif (len(team_a) < 2):
+    elif (len(team_a) < 1):
+    #elif (len(team_a) < 2):
         await interaction.response.send_message("❌ Need at least 2 players in both teams !", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
     elif (sorted(match.ready_players) != sorted(all_players)):
@@ -144,11 +154,11 @@ async def start_match_command(interaction: discord.Interaction, match_id: int, c
         update_match(match_id, state=MatchStep.IN_PROGRESS)
         await interaction.response.send_message("✅ Match started! No more players can join.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         finish_match_time = datetime.now(pytz.timezone('CET')) + timedelta(seconds=FINISH_MATCH_AFTER_IN_SEC)
-        #await interaction.message.edit(content=f"--\n⏳ Match in progress!\nCan be finished at CET {finish_match_time.strftime('%H:%M:%S')}", view=None)
-        await interaction.message.edit(content=f"--\n⏳ Match in progress!", view=None)
+        #await interaction.message.edit(content=f"⏳ Match in progress!\nCan be finished at CET {finish_match_time.strftime('%H:%M:%S')}", view=None)
+        await interaction.message.edit(content=f"⏳ Match in progress!", view=None)
         await refresh_match_in_lobby(interaction.channel, match, team_a, team_b, user_id)
 
-async def submit_score_command(interaction: discord.Interaction, match_id: int):
+async def submit_score_command(interaction: discord.Interaction, result:str, match_id: int):
     user_id = interaction.user.id
     match = get_match_by_id(match_id)
     
@@ -156,14 +166,43 @@ async def submit_score_command(interaction: discord.Interaction, match_id: int):
         await interaction.response.send_message("❌ Match does not exist!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
 
-    # TODO Add score input interface
-
+    if not is_user_in_match_id(user_id, match.id):
+        await interaction.response.send_message("❌ You are not part of this match.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+        return
+    
     if match.state != MatchStep.IN_PROGRESS:  
         await interaction.response.send_message("❌ Match has to be started first!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
+
+    result = interaction.data["values"][0]
+    votes = add_match_result(user_id, match.id, result)
+
+    total_votes = sum(row["votes"] for row in votes)
+    if total_votes >= len(votes) // 2 + 1:  # Half + 1 for consensus
+        finalize_match(match.id, result)
+        await interaction.response.send_message("✅ Match finalized!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
     else:
-        update_match(match_id, state=MatchStep.DONE)
-        match = get_match_by_id(match_id)
-        await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, user_id)
+        await interaction.response.send_message(f"✅ Vote registered for {result}. Waiting for more votes...", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+
+    update_match(match_id, state=MatchStep.DONE)
+    match = get_match_by_id(match_id)
+    await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, user_id)
 
     # TODO Add match to history channel
+
+async def kick_player_command(interaction: discord.Interaction, player_id: int, match_id: int):
+    await leave_match_command(interaction, match_id, player_id)
+    
+    match = get_match_by_id(match_id)
+    await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, interaction.user.id)
+
+    await interaction.response.send_message(f"🥾 Player **{player_id}** has been kicked.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+
+async def ban_player_command(interaction: discord.Interaction, player_id:int, match_id: int):
+    ban_player_from_match(player_id, match_id) # Add to ban list
+    await leave_match_command(interaction, match_id, player_id) # Kick player
+
+    match = get_match_by_id(match_id)
+    await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, interaction.user.id)
+
+    await interaction.response.send_message(f"⛔ Player **{player_id}** has been banned.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)

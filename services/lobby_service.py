@@ -1,7 +1,9 @@
 import discord
-from database.Match import Match
+from database.constants import WAR_CHANNEL_NAME_END,  WAR_CHANNEL_NAME_START
+from models.Match import Match
 from database.enums import MatchStep
-from utils.team_utils import set_teams_composition
+from services.match_service import get_players
+from utils.team_utils import player_ids_to_dict, set_teams_composition
 
 # Dictionary with key=match_id and value=message_data 
 posted_war_message_dict = {}
@@ -12,7 +14,9 @@ async def add_match_to_lobby(channel: discord.TextChannel, match_id, game_type, 
     """
     from view.match_lobby_view import MatchLobbyView, MatchLobbyEmbed
 
-    view = MatchLobbyView(match_id=match_id, user_id=creator_id)
+    players_ids = get_players(match_id)
+    player_list = await player_ids_to_dict(channel, players_ids)
+    view = MatchLobbyView(match_id=match_id, player_list=player_list)
     embed = MatchLobbyEmbed(game_type)
     await embed._init(channel, creator_id)
 
@@ -51,5 +55,11 @@ async def refresh_match_in_lobby(channel: discord.TextChannel, match: Match, tea
         # View update
         from view.match_lobby_view import MatchLobbyView
 
-        view = MatchLobbyView(match.id, user_id)
+        players_ids = get_players(match.id)
+        player_list = await player_ids_to_dict(channel, players_ids)
+        view = MatchLobbyView(match_id=match.id, player_list=player_list)
         await message.edit(view=view)
+    
+    # Refresh channel name
+    await channel.edit(name=WAR_CHANNEL_NAME_START + str(len(posted_war_message_dict)) + WAR_CHANNEL_NAME_END)
+   
