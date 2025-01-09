@@ -124,7 +124,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
-env/
+env/**
 venv/
 ENV/
 env.bak/
@@ -163,4 +163,3 @@ cython_debug/
 
 # Database
 *.db
-./database/*.db
