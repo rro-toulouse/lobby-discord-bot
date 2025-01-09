@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import discord
@@ -7,6 +8,7 @@ from database.db_manager import *
 from discord.ext import commands
 from view.match_creation_view import CreateMatchView
 from view.main_menu_view import MainMenuView
+from utils.match_utils import on_match_action
 from database.enums import MatchStep
 from services.match_service import is_user_already_in_war, create_match, add_player_to_team
 from services.user_service import *
@@ -103,10 +105,11 @@ async def on_interaction(interaction: discord.Interaction):
                         game_type=game_type,
                         creator_id=creator_id
                     )
-                    await interaction.response.send_message(f"✅ Match created and posted in #{lobby_channel.name}!")
+                    await on_match_action(match_id, lobby_channel)
+                    await interaction.response.send_message(f"✅ Match created and posted in #{lobby_channel.name}!", delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
                 else:
                     print(f"Channel with ID {WARS_LOBBY_CHANNEL} not found or bot cannot access it.")
-                    await interaction.response.send_message("❌ Could not find the #wars-lobby channel.")
+                    await interaction.response.send_message("❌ Could not find the #matches-lobby channel.", delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
                     
 # Run the bot
 bot.run(TOKEN)
