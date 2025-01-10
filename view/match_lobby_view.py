@@ -1,14 +1,14 @@
 import discord
 from discord import Embed
 from discord.ui import View
-from database.enums import MatchStep
+from database.enums import MatchIssue, MatchStep
 from services.match_service import get_match_by_id, is_user_in_match_id
 from utils.team_utils import get_member_name_by_id
 from view.buttons.join_match_button import JoinMatchButton
 from view.buttons.leave_match_button import LeaveMatchButton
 from view.buttons.ready_toggle_button import ReadyToggleButton
+from view.buttons.result_button import ResultButton
 from view.buttons.start_match_button import StartMatchButton
-from view.buttons.submit_score_button import SubmitScoreButton
 from view.buttons.switch_team_button import SwitchTeamButton
 from view.dropdown.result_dropdown import ResultDropdown
 
@@ -26,8 +26,8 @@ class MatchLobbyView(View):
             self.add_item(StartMatchButton(label="Start", style=discord.ButtonStyle.primary, match_id=match_id, creator_id=match.creator_id))
          
         elif (match.state == MatchStep.IN_PROGRESS):
-            self.add_item(ResultDropdown(label="Select Match Result", style=discord.ButtonStyle.green, match_id=match_id))
-
+            self.add_item(ResultDropdown(label="Select Match Result...", style=discord.ButtonStyle.gray, match_id=match_id))
+            
 class MatchLobbyEmbed(Embed):
     description = ""
     def __init__(self, game_type):

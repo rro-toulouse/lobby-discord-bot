@@ -328,17 +328,58 @@ def is_user_in_match_id(user_id: int, match_id: int) -> bool:
             db_connection.close()
 
 """
-Return the number of votes for this match
+Checks if a user has already voted for a match result in the database.
+
+Args:
+    user_id (int): The ID of the user to check.
+    match_id (int): The ID of the match to check votes for.
+
+Returns:
+    bool: True if the user has already voted, False otherwise.
 """
-def add_match_result(user_id: int, match_id: int, result: str) -> int:
+def has_user_voted(user_id: int, match_id: int) -> bool:
+    # Connect to the database    
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
 
-    db_cursor.execute("INSERT INTO match_results (match_id, user_id, result) VALUES (?, ?, ?)",
-                       (match_id, user_id, result))
+    try:
+        # Query to check if the user has voted
+        query = """
+        SELECT COUNT(*) FROM match_results
+        WHERE user_id = ? AND match_id = ?
+        """
+        db_cursor.execute(query, (user_id, match_id))
+        result = db_cursor.fetchone()
+
+        # Check if the user has voted
+        return result[0] > 0
+
+    finally:
+        # Close the database connection
+        db_connection.close()
+
+"""
+Return the number of votes for this match
+"""
+def add_match_result(user_id: int, match_id: int, result: str):
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+    
+    db_cursor.execute("SELECT * FROM match_results WHERE match_id = ? AND user_id = ?", (match_id, user_id))
+    existing_entry = db_cursor.fetchone()
+
+    if existing_entry:
+        # Update the existing result
+        db_cursor.execute("UPDATE match_results SET result = ? WHERE match_id = ? AND user_id = ?",
+                        (result, match_id, user_id))
+    else:
+        # Insert a new result
+        db_cursor.execute("INSERT INTO match_results (match_id, user_id, result) VALUES (?, ?, ?)",
+                        (match_id, user_id, result))
     db_connection.commit()
 
-    db_connection.execute("SELECT result, COUNT(*) as votes FROM match_results WHERE match_id = ? GROUP BY result",
+    # Count the votes to check if a consensus is reached
+    db_cursor.execute("SELECT result, COUNT(*) as votes FROM match_results WHERE match_id = ? GROUP BY result",
                     (match_id,))
     votes = db_cursor.fetchall()
     db_connection.close()
@@ -349,7 +390,7 @@ def add_match_result(user_id: int, match_id: int, result: str) -> int:
 def finalize_match(match_id, final_result):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
-    db_cursor.execute("UPDATE matches SET state = ?, result = ? WHERE match_id = ?",
-                   (MatchStep.DONE, final_result, match_id))
+    db_cursor.execute("UPDATE matches SET state = ?, result = ? WHERE id = ?",
+                   (MatchStep.DONE.value, final_result, match_id))
     db_connection.commit()
     db_connection.close()

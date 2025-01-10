@@ -11,8 +11,8 @@ class MatchStep(Enum):
     DONE = "done"
 
 class MatchIssue(Enum):
-    MY_TEAM_WON = "my_team_won"
-    OPPONENT_TEAM_WON = "opponent_team_won"
+    TEAM_A_WON = "team_a_won"
+    TEAM_B_WON = "team_b_won"
     DRAW = "draw"
     CANCEL = "cancel"
     NONE = "none"

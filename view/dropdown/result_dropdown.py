@@ -11,8 +11,8 @@ class ResultDropdown(Select):
         self.match_id = match_id
 
         options=[
-            discord.SelectOption(label="My Team Won", value=MatchIssue.MY_TEAM_WON.value),
-            discord.SelectOption(label="Opponent Team Won", value=MatchIssue.OPPONENT_TEAM_WON.value),
+            discord.SelectOption(label="Team A Won", value=MatchIssue.TEAM_A_WON.value),
+            discord.SelectOption(label="Team B Won", value=MatchIssue.TEAM_B_WON.value),
             discord.SelectOption(label="Draw", value=MatchIssue.DRAW.value),
             discord.SelectOption(label="Match Canceled", value=MatchIssue.CANCEL.value),
         ]

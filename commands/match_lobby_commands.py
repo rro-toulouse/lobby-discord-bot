@@ -165,17 +165,20 @@ async def submit_score_command(interaction: discord.Interaction, result:str, mat
         await interaction.response.send_message("❌ Match has to be started first!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
         return
 
-    result = interaction.data["values"][0]
     votes = add_match_result(user_id, match.id, result)
 
-    total_votes = sum(row["votes"] for row in votes)
-    if total_votes >= len(votes) // 2 + 1:  # Half + 1 for consensus
-        finalize_match(match.id, result)
-        await interaction.response.send_message("✅ Match finalized!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
-    else:
-        await interaction.response.send_message(f"✅ Vote registered for {result}. Waiting for more votes...", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+    # Close match business rule
+    threshold = (len(match.team_a) + len(match.team_b) // 2) + 1
 
-    update_match(match_id, state=MatchStep.DONE)
+    for vote in votes:
+        nb_vote = vote[1]
+        if nb_vote >= threshold:
+            finalize_match(match.id, result)    
+            update_match(match_id, state=MatchStep.DONE)
+            await interaction.response.send_message("✅ Match finalized!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            return
+    await interaction.response.send_message(f"✅ Vote registered for {result}. Waiting for more votes...", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+
     match = get_match_by_id(match_id)
     await refresh_match_in_lobby(interaction.channel, match, match.team_a, match.team_b, user_id)
 
