@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 from models.Match import Match
 from database.db_manager import get_connection
-from database.enums import MatchStep
+from database.enums import MatchIssue, MatchStep
 
 """
 Checks if a user is already in any team across active matches.
@@ -22,9 +22,17 @@ def is_user_already_in_war(user_id):
         (state LIKE ? OR
         state LIKE ?)
     """, (f'%{user_id_str}%', f'%{user_id_str}%', f'%{MatchStep.IN_CONSTRUCTION.value}%', f'%{MatchStep.IN_PROGRESS.value}%'))
-    result = db_cursor.fetchone() is not None  # Return the first match found, if any
+    match = db_cursor.fetchone()
     db_connection.close()
-    return result 
+    if match is None: # Business rule : Player is not in a match already
+        return False
+    
+    match_data: Match = Match.from_database(match)
+    player_vote = get_match_vote_for_a_player(match_data.id, user_id)
+    if player_vote is not None: # Business rule : Player is in a match and has voted for the result
+        return False
+
+    return True # Business rule : Player in a match and has not voted
 
 def get_lobby_matches():
     db_connection = get_connection()
@@ -405,7 +413,7 @@ def has_user_voted(user_id: int, match_id: int) -> bool:
     try:
         # Query to check if the user has voted
         query = """
-        SELECT COUNT(*) FROM match_results
+        SELECT COUNT(*) FROM match_votes
         WHERE user_id = ? AND match_id = ?
         """
         db_cursor.execute(query, (user_id, match_id))
@@ -421,30 +429,63 @@ def has_user_voted(user_id: int, match_id: int) -> bool:
 """
 Return the number of votes for this match
 """
-def add_match_result(user_id: int, match_id: int, result: str):
+def add_match_vote(user_id: int, match_id: int, vote: str):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     
-    db_cursor.execute("SELECT * FROM match_results WHERE match_id = ? AND user_id = ?", (match_id, user_id))
+    db_cursor.execute("SELECT * FROM match_votes WHERE match_id = ? AND user_id = ?", (match_id, user_id))
     existing_entry = db_cursor.fetchone()
 
     if existing_entry:
         # Update the existing result
-        db_cursor.execute("UPDATE match_results SET result = ? WHERE match_id = ? AND user_id = ?",
-                        (result, match_id, user_id))
+        db_cursor.execute("UPDATE match_votes SET vote = ? WHERE match_id = ? AND user_id = ?",
+                        (vote, match_id, user_id))
     else:
         # Insert a new result
-        db_cursor.execute("INSERT INTO match_results (match_id, user_id, result) VALUES (?, ?, ?)",
-                        (match_id, user_id, result))
+        db_cursor.execute("INSERT INTO match_votes (match_id, user_id, vote) VALUES (?, ?, ?)",
+                        (match_id, user_id, vote))
     db_connection.commit()
 
     # Count the votes to check if a consensus is reached
-    db_cursor.execute("SELECT result, COUNT(*) as votes FROM match_results WHERE match_id = ? GROUP BY result",
+    db_cursor.execute("SELECT vote, COUNT(*) as votes FROM match_votes WHERE match_id = ? GROUP BY vote",
                     (match_id,))
     votes = db_cursor.fetchall()
     db_connection.close()
 
     return votes
+
+"""
+Retrieves the match result submitted by a player for a specific match.
+
+Args:
+    match_id (int): The ID of the match.
+    player_id (int): The ID of the player.
+
+Returns:
+    str: The vote submitted by the player (e.g., "My team won", "My team lost", "Draw", "Cancelled"),
+            or None if the player hasn't submitted a vote.
+"""
+def get_match_vote_for_a_player(match_id: int, player_id: int) -> Optional["MatchIssue"]:
+    db_connection = get_connection()
+    db_cursor = db_connection.cursor()
+
+    # Query to fetch the vote from the match_votes table
+    query = """
+    SELECT vote
+    FROM match_votes
+    WHERE match_id = ? AND user_id = ?
+    """
+    db_cursor.execute(query, (match_id, player_id))
+    result = db_cursor.fetchone()
+    
+    db_connection.close()
+    # Map the result to the MatchIssue enum if found
+    if result:
+        try:
+            return MatchIssue(result[0])
+        except ValueError:
+            return None  # Handle unexpected values in the database
+    return None
 
 """Finalize a match in the database."""
 def finalize_match(match_id, final_result):

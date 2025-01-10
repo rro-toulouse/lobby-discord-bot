@@ -38,11 +38,11 @@ def create_tables(db_connection, db_cursor):
     )
     """)
     db_cursor.execute("""
-    CREATE TABLE IF NOT EXISTS match_results (
+    CREATE TABLE IF NOT EXISTS match_votes (
         id INTEGER PRIMARY KEY,
         match_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
-        result TEXT NOT NULL
+        vote TEXT NOT NULL
     )
     """)
     db_connection.commit()

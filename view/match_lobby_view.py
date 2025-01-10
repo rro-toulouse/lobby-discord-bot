@@ -4,13 +4,12 @@ from discord import Embed
 from discord.ui import View
 import pytz
 from database.constants import FINISH_MATCH_AFTER_IN_SEC
-from database.enums import MatchStep
+from database.enums import Ladder, MatchStep
 from services.match_service import get_match_by_id
 from utils.user_utils import get_member_name_by_id
 from view.buttons.join_match_button import JoinMatchButton
 from view.buttons.leave_match_button import LeaveMatchButton
 from view.buttons.ready_toggle_button import ReadyToggleButton
-from view.buttons.result_button import ResultButton
 from view.buttons.start_match_button import StartMatchButton
 from view.buttons.switch_team_button import SwitchTeamButton
 from view.dropdown.player_management_dropdown import PlayerActionDropdown
@@ -40,7 +39,13 @@ class MatchLobbyEmbed(Embed):
     def __init__(self, game_type):
         super().__init__()
 
-        self.description = f"Game Type: **{game_type}**\n"
+        displayed_game_type = ""
+        if game_type == Ladder.REALISM:
+            displayed_game_type = "Realism"
+        elif game_type == Ladder.DEFAULT:
+            displayed_game_type = "Default"
+
+        self.description = f"Game Type: **{displayed_game_type}**\n"
         discord.Embed(
             title="New Match Created!",
             description=self.description ,
