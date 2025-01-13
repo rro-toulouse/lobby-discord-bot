@@ -11,3 +11,4 @@ class MainMenuView(View):
         #self.add_item(Button(label="View Profile", style=discord.ButtonStyle.secondary, custom_id="view_profile"))
         #self.add_item(Button(label="Help", style=discord.ButtonStyle.link, url="https://your-help-url.com"))  # Link button
         self.add_item(Button(label="Help", style=discord.ButtonStyle.secondary, custom_id="help"))  # Help button
+        #self.add_item(Button(label="Test", style=discord.ButtonStyle.secondary, custom_id="test"))  # Dev purposes only

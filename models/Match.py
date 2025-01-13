@@ -9,6 +9,10 @@ class Match:
         creator_id: int,
         team_a: Optional[List[int]] = None,
         team_b: Optional[List[int]] = None,
+        team_a_points: Optional[int] = -1,
+        team_b_points: Optional[int] = -1,
+        team_a_elo: Optional[int] = -1,
+        team_b_elo: Optional[int] = -1,
         game_type: str = Ladder.NONE,
         state: MatchStep = MatchStep.IN_CONSTRUCTION,
         map_a: Optional[str] = None,
@@ -24,6 +28,10 @@ class Match:
         self.creator_id = creator_id
         self.team_a = team_a if team_a is not None else []
         self.team_b = team_b if team_b is not None else []
+        self.team_a_points = team_a_points
+        self.team_b_points = team_b_points
+        self.team_a_elo = team_a_elo
+        self.team_b_elo = team_b_elo
         self.game_type = game_type
         self.state = state
         self.map_a = map_a
@@ -42,6 +50,10 @@ class Match:
             "creator_id": self.creator_id,
             "team_a": self.team_a,
             "team_b": self.team_b,
+            "team_a_points": self.team_a_points,
+            "team_b_points": self.team_b_points,
+            "team_a_elo": self.team_a_elo,
+            "team_b_elo": self.team_b_elo,
             "game_type": self.game_type,
             "state": self.state.value,
             "map_a": self.map_a,
@@ -62,6 +74,10 @@ class Match:
             creator_id=data["creator_id"],
             team_a=data.get("team_a", []),
             team_b=data.get("team_b", []),
+            team_a_points=data.get("team_a_points"),
+            team_b_points=data.get("team_b_points"),
+            team_a_elo=data.get("team_a_elo"),
+            team_b_elo=data.get("team_b_elo"),
             game_type=data["game_type"],
             state=MatchStep(data["state"]),
             map_a=data.get("map_a"),
@@ -92,6 +108,10 @@ class Match:
             creator_id=row[4],
             team_a=[int(player_id) for player_id in row[2][1:-1].split(",")] if row[2][1:-1] else [],
             team_b=[int(player_id) for player_id in row[3][1:-1].split(",")] if row[3][1:-1] else [],
+            team_a_points=row[14],
+            team_b_points=row[15],
+            team_a_elo=row[16],
+            team_b_elo=row[17],
             game_type=row[8],
             state=MatchStep(row[1]),
             map_a=row[5],

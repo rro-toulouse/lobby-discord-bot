@@ -6,7 +6,6 @@ import pytz
 from database.constants import FINISH_MATCH_AFTER_IN_SEC
 from database.enums import Ladder, MatchStep
 from services.match_service import get_match_by_id
-from utils.user_utils import get_member_name_by_id
 from view.buttons.join_match_button import JoinMatchButton
 from view.buttons.leave_match_button import LeaveMatchButton
 from view.buttons.ready_toggle_button import ReadyToggleButton
@@ -53,8 +52,6 @@ class MatchLobbyEmbed(Embed):
         )
 
     async def _init(self, channel: discord.TextChannel, creator_id: int):
-        creator_name = await get_member_name_by_id(channel, creator_id)
-
-        self.description  += f"Created by: **{creator_name}**\n\n" 
-        self.description  += f"**Team A:**\n{creator_name} 👑 \n\n"
+        self.description  += f"Created by: <@{creator_id}>\n\n" 
+        self.description  += f"**Team A:**\n<@{creator_id}> 👑 \n\n"
         self.description  += f"**Team B:**"

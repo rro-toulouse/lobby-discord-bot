@@ -2,9 +2,7 @@ import discord
 from discord.ui import Select
 
 from commands.match_lobby_commands import submit_score_command
-from database.constants import DELETE_MESSAGE_AFTER_IN_SEC
 from database.enums import MatchIssue
-from services.match_service import add_match_vote, finalize_match, get_match_by_user_id, is_user_in_match_id
 
 class ResultDropdown(Select):
     def __init__(self, label: str, style: discord.ButtonStyle, match_id: int):

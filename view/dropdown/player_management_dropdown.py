@@ -2,7 +2,6 @@ import discord
 from discord.ui import Select
 
 from database.constants import DELETE_MESSAGE_AFTER_IN_SEC
-from utils.user_utils import get_member_name_by_id
 from view.player_action_view import PlayerActionConfirm
 
 class PlayerActionDropdown(Select):
@@ -30,12 +29,11 @@ class PlayerActionDropdown(Select):
         
         user_id = interaction.user.id
         if user_id != self.creator_id:
-            await interaction.response.send_message("❌ Only the war leader can manage players!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            await interaction.response.send_message("❌ Only the match leader can manage players!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
             return
 
         # Present kick/ban options
         view = PlayerActionConfirm(self.match_id, player_id)
-        player_name = await get_member_name_by_id(interaction.channel, player_id)
         await interaction.response.send_message(
-            content=f"What action would you like to take for player **{player_name}**?", view=view, ephemeral=True, 
+            content=f"What action would you like to take for player **<@{player_id}>**?", view=view, ephemeral=True, 
         )

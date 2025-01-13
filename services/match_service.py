@@ -1,6 +1,8 @@
 import json
 from datetime import datetime
 from typing import Optional
+
+import discord
 from models.Match import Match
 from database.db_manager import get_connection
 from database.enums import MatchIssue, MatchStep
@@ -8,7 +10,7 @@ from database.enums import MatchIssue, MatchStep
 """
 Checks if a user is already in any team across active matches.
 """
-def is_user_already_in_war(user_id):
+def is_user_already_in_match(user_id):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
 
@@ -55,8 +57,8 @@ def create_match(match: Match):
 
     db_cursor.execute(
             """
-            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players, ban_list, last_action)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO matches (state, team_a_players, team_b_players, creator_id, map_a, map_b, start_datetime, game_type, creation_datetime, result, ready_players, ban_list, last_action, team_a_points, team_b_points, team_a_elo, team_b_elo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (match.state.value,
             '['+','.join(map(str, match.team_a))+']',
@@ -70,7 +72,11 @@ def create_match(match: Match):
             match.result.value,
             '['+','.join(map(str, match.ready_players))+']',
             '['+','.join(map(str, match.ban_list))+']',
-            match.last_action
+            match.last_action,
+            match.team_a_points,
+            match.team_b_points,
+            match.team_a_elo,
+            match.team_b_elo
             )
         )
     db_connection.commit()
@@ -91,7 +97,7 @@ def delete_match(match_id):
 """
 Updates the state of a match by match ID.
 """
-def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None, ban_list=None, last_action=None):
+def update_match(match_id, state=None, team_a_players=None, team_b_players=None, map_a=None, map_b=None, start_datetime=None, creator_id=None, ready_players=None, ban_list=None, last_action=None, team_a_points=None, team_b_points=None, team_a_elo=None, team_b_elo=None):
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     
@@ -129,6 +135,18 @@ def update_match(match_id, state=None, team_a_players=None, team_b_players=None,
     if last_action is not None:
         updates.append("last_action = ?")
         params.append(last_action)
+    if team_a_points is not None:
+        updates.append("team_a_points = ?")
+        params.append(json.dumps(team_a_points))
+    if team_b_points is not None:
+        updates.append("team_b_points = ?")
+        params.append(json.dumps(team_b_points))
+    if team_a_elo is not None:
+        updates.append("team_a_elo = ?")
+        params.append(json.dumps(team_a_elo))
+    if team_b_elo is not None:
+        updates.append("team_b_elo = ?")
+        params.append(json.dumps(team_b_elo))
 
     params.append(match_id)
     query = f"UPDATE matches SET {', '.join(updates)} WHERE id = ?"
@@ -390,8 +408,8 @@ def is_user_banned(match_id: int, user_id: int) -> bool:
         ban_list = result[0]
         if ban_list:
             # Convert the ban_list (comma-separated string) into a list of integers
-            banned_users = [int(player_id) for player_id in ban_list[1:-1].split(",") if player_id.strip()]
-            return user_id in banned_users
+            banned_players = [int(player_id) for player_id in ban_list[1:-1].split(",") if player_id.strip()]
+            return user_id in banned_players
 
     return False
 
@@ -489,6 +507,10 @@ def get_match_vote_for_a_player(match_id: int, player_id: int) -> Optional["Matc
 
 """Finalize a match in the database."""
 def finalize_match(match_id, final_result):
+
+    # TODO Add compute team ELO here
+    # TODO Add compute team points here
+
     db_connection = get_connection()
     db_cursor = db_connection.cursor()
     db_cursor.execute("UPDATE matches SET state = ?, result = ? WHERE id = ?",
@@ -522,3 +544,14 @@ def get_players(match_id: int) -> list[int]:
         return list(team_a)
     else:
         return list(set(team_a + team_b))
+    
+
+"""
+Posts / update match details in the lobby channel with a "Join Match" button.
+"""
+async def post_match_to_history_channel(channel: discord.TextChannel, match: Match):
+    
+    from view.match_history_view import MatchHistoryEmbed
+
+    embed = MatchHistoryEmbed(match)
+    await channel.send(embed=embed)

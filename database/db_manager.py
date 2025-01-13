@@ -25,13 +25,16 @@ def create_tables(db_connection, db_cursor):
         result TEXT NOT NULL,
         ready_players TEXT NOT NULL,
         ban_list TEXT NOT NULL,
-        last_action DATETIME
+        last_action DATETIME,
+        team_a_points INTEGER NOT NULL,
+        team_b_points INTEGER NOT NULL,
+        team_a_elo INTEGER NOT NULL,
+        team_b_elo INTEGER NOT NULL
     )
     """)
     db_cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY,
-        username TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS players (
+        discord_id INTEGER PRIMARY KEY,
         elo_realism INTEGER DEFAULT 1000,
         elo_default INTEGER DEFAULT 1000,
         created_at TEXT NOT NULL
@@ -45,5 +48,8 @@ def create_tables(db_connection, db_cursor):
         vote TEXT NOT NULL
     )
     """)
+
+    # TODO replace user_ with player_
+
     db_connection.commit()
     db_connection.close()
