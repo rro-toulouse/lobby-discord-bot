@@ -1,7 +1,7 @@
 import discord
 from discord.ui import Select
 
-from database.constants import DELETE_MESSAGE_AFTER_IN_SEC
+from database.constants import SHORT_DELETE_MESSAGE_AFTER_IN_SEC
 from utils.user_utils import get_member_name_by_id
 from view.player_action_view import PlayerActionConfirm
 
@@ -25,12 +25,12 @@ class PlayerActionDropdown(Select):
         player_id = int(self.values[0]) if self.values[0] != "cancel" else None
 
         if self.values[0] == "cancel" or player_id == None or not player_id:
-            await interaction.response.send_message("❌ Action canceled.", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            await interaction.response.send_message("❌ Action canceled.", ephemeral=True, delete_after=SHORT_DELETE_MESSAGE_AFTER_IN_SEC)
             return
         
         user_id = interaction.user.id
         if user_id != self.creator_id:
-            await interaction.response.send_message("❌ Only the war leader can manage players!", ephemeral=True, delete_after=DELETE_MESSAGE_AFTER_IN_SEC)
+            await interaction.response.send_message("❌ Only the war leader can manage players!", ephemeral=True, delete_after=SHORT_DELETE_MESSAGE_AFTER_IN_SEC)
             return
 
         # Present kick/ban options

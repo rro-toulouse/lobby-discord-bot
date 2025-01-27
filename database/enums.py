@@ -22,3 +22,8 @@ class MatchRole(Enum):
     PLAYER = "player"
     CREATOR = "creator"
     NONE = "none"
+
+class LeaderboardDetail(Enum):
+    COMPACT = "Compact"
+    DETAILED = "Detailed"
+    NONE = "none"
